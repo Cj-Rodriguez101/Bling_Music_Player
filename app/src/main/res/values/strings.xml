@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Bling Music Player</string>
+    <string name="album_art">Album Art</string>
+    <string name="search">Search</string>
+
+    <string name="notification_content_title">Playback cannot be resumed</string>
+    <string name="notification_content_text">Press on the play button on the media notification if it
+    is still present, otherwise please open the app to start the playback and re-connect the session
+    to the controller</string>
+    <string name="notification_channel_name">Playback cannot be resumed</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="error">Error</string>
+    <string name="ok">Ok</string>
+    <string name="you_can_go_to_the_app_settings_to_grant_it">You can go to the app settings to grant it.</string>
+    <string name="it_seems_you_permanently_declined_storage">"It seems you permanently declined storage "</string>
+    <string name="success">Success</string>
+    <string name="close">Close</string>
+    <string name="request">Request</string>
+    <string name="must_grant_read_permission">Must grant read permission</string>
+    <string name="delete">Delete</string>
+    <string name="permission_required">Permission Required</string>
+    <string name="info">Info</string>
+</resources>
