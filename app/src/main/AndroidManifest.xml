@@ -39,17 +39,6 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".util.MediaScanBroadcastReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_SCANNER_FINISHED" />
-                <action android:name="android.intent.action.MEDIA_SCANNER_STARTED" />
-                <data android:scheme="file"/>
-                <data android:ssp="content://media/external/audio/*"/>
-                <data android:sspPattern="1"/>
-            </intent-filter>
-        </receiver>
-
         <service
             android:name=".services.PlaybackService"
             android:foregroundServiceType="mediaPlayback"

@@ -23,4 +23,5 @@
     <string name="delete">Delete</string>
     <string name="permission_required">Permission Required</string>
     <string name="info">Info</string>
+    <string name="no_items_found">No items found</string>
 </resources>

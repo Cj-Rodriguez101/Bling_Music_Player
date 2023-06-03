@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -39,26 +40,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.media3.common.Player
 import androidx.media3.session.MediaController
+import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.itemsIndexed
 import com.cjrodriguez.blingmusicplayer.R
 import com.cjrodriguez.blingmusicplayer.model.Song
 import com.cjrodriguez.blingmusicplayer.model.SongWithFavourite
+import com.cjrodriguez.blingmusicplayer.model.SongWrapper
 import com.cjrodriguez.blingmusicplayer.presentation.components.AreYouSureDeleteDialog
 import com.cjrodriguez.blingmusicplayer.presentation.components.Music_Item
 import com.cjrodriguez.blingmusicplayer.presentation.components.SearchAppBar
@@ -68,6 +73,7 @@ import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.Son
 import com.cjrodriguez.blingmusicplayer.presentation.theme.BlingMusicPlayerTheme
 import com.cjrodriguez.blingmusicplayer.util.GenericMessageInfo
 import com.cjrodriguez.blingmusicplayer.util.prepareAndPlay
+import com.cjrodriguez.blingmusicplayer.util.toSongFavourite
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -83,7 +89,7 @@ fun SongListScreen(
     isPlaying: Boolean,
     isShuffle: Boolean,
     shouldRepeat: Boolean,
-    currentSongMediaItem: SongWithFavourite? = null,
+    currentSongMediaItem: SongWrapper? = null,
     nextSongMediaItem: SongWithFavourite? = null,
     prevSongMediaItem: SongWithFavourite? = null,
     itemSongs: LazyPagingItems<SongWithFavourite>,
@@ -91,7 +97,8 @@ fun SongListScreen(
     isLoading: Boolean = false,
     sliderPosition: Float,
     onUpdateSliderPosition: (Long) -> Unit,
-    requestFocusAndPlay: (Long?) -> Unit,
+    updateSliderDraggedState: (Boolean) -> Unit,
+    requestFocusAndPlay: (Long) -> Unit,
     abandonFocusAndPause: () -> Unit,
     query: String,
     controller: MediaController?,
@@ -100,7 +107,6 @@ fun SongListScreen(
     currentVolume: Float,
     updateSeekBar: (Float) -> Unit,
     maxVolume: Float,
-    //messageQueue: Queue<GenericMessageInfo>,
     messageSet: Set<GenericMessageInfo>,
     itemToDelete: MutableState<Song?>,
     dialogVolumeState: MutableState<Boolean>,
@@ -137,7 +143,6 @@ fun SongListScreen(
     val launcher = rememberLauncherForActivityResult(contract =
     ActivityResultContracts.StartIntentSenderForResult(), onResult = {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            Log.e("sammm", it.toString())
             if (it.resultCode == RESULT_OK) {
                 itemToDelete.value?.let { song ->
                     onTriggerEvent(SongListEvents.CompleteDeleteSong(listOf(song)))
@@ -234,7 +239,7 @@ fun SongListScreen(
                         setUnSetFavourite = {
                             onTriggerEvent(
                                 SongListEvents.SetUnSetFavourite(
-                                    currentSongMediaItem
+                                    currentSongMediaItem.toSongFavourite()
                                 )
                             )
                         },
@@ -257,14 +262,15 @@ fun SongListScreen(
                                 controller?.let { controller ->
                                     controller.setMediaItem(it.song.mediaItem)
                                     if (controller.isPlaying) {
-                                        controller?.prepareAndPlay()
+                                        controller.prepareAndPlay()
                                     }
                                 }
                             }
                         },
                         playOrPause = {
                             if (!isPlaying) {
-                                requestFocusAndPlay(null)
+                                requestFocusAndPlay(sliderPosition.toLong())
+                                //requestFocusAndPlay(null)
                             } else {
                                 abandonFocusAndPause()
                             }
@@ -303,6 +309,7 @@ fun SongListScreen(
                                 )
                             )
                         },
+                        updateSliderDraggedState = updateSliderDraggedState,
                         displayVolumeDialog = {
                             if (dialogVolumeState.value) {
                                 dialogVolumeState.value = false
@@ -374,34 +381,59 @@ fun SongListScreen(
                 },
                 snackbarHost = { SnackbarHost(snackBarHostState) },
             ) { paddingValues ->
-
-                when {
-
-                    itemSongs.itemCount > 0 -> {
-                        LazyColumn(
-                            modifier = Modifier
-                                .padding(
-                                    start = 16.dp,
-                                    end = 16.dp,
-                                    top = paddingValues.calculateTopPadding()
-                                )
-                        ) {
-                            itemsIndexed(items = itemSongs) { index, item ->
-                                item?.let { itemSong ->
-                                    Music_Item(item, deleteSong = {
-                                        itemToDelete.value = itemSong.song
-                                        openDeleteDialog() }
-                                    ) {
-                                        onUpdateSliderPosition(0L)
-                                        onTriggerEvent(SongListEvents.SetCurrentSong(itemSong))
-                                        requestFocusAndPlay(0L)
+                when(itemSongs.loadState.refresh){
+                    LoadState.Loading -> {
+                        Log.e("state", "loading")
+                    }
+                    is LoadState.Error -> {
+                        Log.e("state", "error")
+                    }
+                    else->{
+                        when {
+                            itemSongs.itemCount > 0 -> {
+                                Log.e("state", "info")
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .padding(
+                                            start = 16.dp,
+                                            end = 16.dp,
+                                            top = paddingValues.calculateTopPadding()
+                                        )
+                                ) {
+                                    itemsIndexed(items = itemSongs) { index, item ->
+                                        item?.let { itemSong ->
+                                            Music_Item(item, deleteSong = {
+                                                itemToDelete.value = itemSong.song
+                                                openDeleteDialog()
+                                            }
+                                            ) {
+                                                onUpdateSliderPosition(0L)
+                                                onTriggerEvent(SongListEvents.SetCurrentSong(itemSong))
+                                                requestFocusAndPlay(0L)
+                                            }
+                                        }
                                     }
                                 }
                             }
+
+                            itemSongs.itemCount == 0 -> {
+                                Column(verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(
+                                            start = 16.dp,
+                                            end = 16.dp,
+                                            top = paddingValues.calculateTopPadding(),
+                                            bottom = paddingValues.calculateBottomPadding()
+                                        )
+                                ){
+                                    Text(
+                                        stringResource(R.string.no_items_found),
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
                         }
-                    }
-                    itemSongs.itemCount == 0 -> {
-                        Text("No items found")
                     }
                 }
             }

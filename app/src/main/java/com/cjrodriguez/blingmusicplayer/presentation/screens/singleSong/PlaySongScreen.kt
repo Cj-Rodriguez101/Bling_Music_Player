@@ -3,6 +3,7 @@ package com.cjrodriguez.blingmusicplayer.presentation.screens.singleSong
 import android.content.res.Configuration.ORIENTATION_LANDSCAPE
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -35,6 +36,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -55,16 +59,18 @@ import androidx.media3.session.MediaController
 import androidx.palette.graphics.Palette
 import com.cjrodriguez.blingmusicplayer.R
 import com.cjrodriguez.blingmusicplayer.model.SongWithFavourite
+import com.cjrodriguez.blingmusicplayer.model.SongWrapper
 import com.cjrodriguez.blingmusicplayer.presentation.components.SongImage
 import com.cjrodriguez.blingmusicplayer.presentation.theme.Purple80
 import com.cjrodriguez.blingmusicplayer.util.Util
+import com.cjrodriguez.blingmusicplayer.util.toSongFavourite
 
 @androidx.media3.common.util.UnstableApi
 @ExperimentalFoundationApi
 @ExperimentalMaterialApi
 @Composable
 fun PlaySongScreen(
-    currentSong: SongWithFavourite,
+    currentSong: SongWrapper,
     bottomSheetScaffoldState: BottomSheetScaffoldState,
     collapseExpandBottomSheet: (Boolean) -> Unit,
     skipForward: () -> Unit,
@@ -74,6 +80,7 @@ fun PlaySongScreen(
     setUnSetFavourite: (SongWithFavourite) -> Unit,
     updateShuffle: () -> Unit,
     updateRepeat: () -> Unit,
+    updateSliderDraggedState: (Boolean) -> Unit,
     sliderPosition: Float,
     onUpdateSliderPosition: (Float) -> Unit,
     controller: MediaController?,
@@ -156,6 +163,7 @@ fun PlaySongScreen(
                     duration,
                     updateShuffle,
                     updateRepeat,
+                    updateSliderDraggedState,
                     isShuffle,
                     shouldRepeat,
                     skipBackward,
@@ -177,6 +185,7 @@ fun PlaySongScreen(
                     duration,
                     updateShuffle,
                     updateRepeat,
+                    updateSliderDraggedState,
                     isShuffle,
                     shouldRepeat,
                     skipBackward,
@@ -263,7 +272,7 @@ private fun LandScapeExpandedScreen(
     collapseExpandBottomSheet: (Boolean) -> Unit,
     displayVolumeDialog: () -> Unit,
     currentVolume: Int,
-    currentSong: SongWithFavourite,
+    currentSong: SongWrapper,
     setUnSetFavourite: (SongWithFavourite) -> Unit,
     sliderPosition: Float,
     controllerSeekTo: (Long) -> Unit,
@@ -271,6 +280,7 @@ private fun LandScapeExpandedScreen(
     duration: Long,
     updateShuffle: () -> Unit,
     updateRepeat: () -> Unit,
+    updateSliderDraggedState: (Boolean) -> Unit,
     isShuffle: Boolean,
     shouldRepeat: Boolean,
     skipBackward: () -> Unit,
@@ -360,6 +370,7 @@ private fun LandScapeExpandedScreen(
                     duration,
                     updateShuffle,
                     updateRepeat,
+                    updateSliderDraggedState,
                     isShuffle,
                     shouldRepeat,
                     skipBackward,
@@ -375,13 +386,14 @@ private fun LandScapeExpandedScreen(
 @Composable
 private fun MusicControlsSegment(
     setUnSetFavourite: (SongWithFavourite) -> Unit,
-    currentSong: SongWithFavourite,
+    currentSong: SongWrapper,
     sliderPosition: Float,
     controllerSeekTo: (Long) -> Unit,
     onUpdateSliderPosition: (Float) -> Unit,
     duration: Long,
     updateShuffle: () -> Unit,
     updateRepeat: () -> Unit,
+    updateSliderDraggedState: (Boolean) -> Unit,
     isShuffle: Boolean,
     shouldRepeat: Boolean,
     skipBackward: () -> Unit,
@@ -390,12 +402,24 @@ private fun MusicControlsSegment(
     skipForward: () -> Unit,
     isSystemInDarkMode: Boolean
 ) {
+    val pos = remember{ mutableFloatStateOf(0f) }
+    val timeString by remember (sliderPosition){
+        derivedStateOf {
+            Util.convertMillisecondLongToFormattedTimeString(sliderPosition.toLong())
+        }
+    }
+    val durationString by remember (duration){
+        derivedStateOf {
+            Util.convertMillisecondLongToFormattedTimeString(duration)
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         IconButton(
-            onClick = { setUnSetFavourite(currentSong) },
+            onClick = { setUnSetFavourite(currentSong.toSongFavourite()) },
             modifier = Modifier.padding(bottom = 16.dp)
         ) {
             if (currentSong.isFavourite == 0) {
@@ -417,15 +441,20 @@ private fun MusicControlsSegment(
             value = sliderPosition,
             modifier = Modifier.padding(start = 16.dp, end = 8.dp),
             onValueChange = {
-                controllerSeekTo(it.toLong())
+                //controllerSeekTo(it.toLong())
+                updateSliderDraggedState(true)
                 onUpdateSliderPosition(it)
+                pos.floatValue = it
             },
             valueRange = 0f..duration.toFloat(),
             onValueChangeFinished = {
                 //controllerSeekTo(sliderPosition.toLong())
+                controllerSeekTo(pos.floatValue.toLong())
+                //Log.e("poter", "onValueChangeFinished $sliderPosition pos ${pos.floatValue}")
+                updateSliderDraggedState(false)
+                //controllerSeekTo(sliderPosition.toLong())
                 //prepare controller if not prepared
                 //onUpdateSliderPosition(sliderPosition)
-                //Log.e("rogan", sliderPosition.toString())
                 //controller?.seekTo(sliderPosition.toLong())
                 //seekToPosition()
             },
@@ -438,11 +467,11 @@ private fun MusicControlsSegment(
                 .padding(start = 16.dp, end = 16.dp)
         ) {
             Text(
-                text = Util.convertMillisecondLongToFormattedTimeString(sliderPosition.toLong()),
+                text = timeString,
                 color = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = Util.convertMillisecondLongToFormattedTimeString(duration),
+                text = durationString,
                 color = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground
             )
         }
@@ -521,7 +550,7 @@ private fun PortraitExpandedScreen(
     collapseExpandBottomSheet: (Boolean) -> Unit,
     displayVolumeDialog: () -> Unit,
     currentVolume: Int,
-    currentSong: SongWithFavourite,
+    currentSong: SongWrapper,
     setUnSetFavourite: (SongWithFavourite) -> Unit,
     sliderPosition: Float,
     controllerSeekTo: (Long) -> Unit,
@@ -529,6 +558,7 @@ private fun PortraitExpandedScreen(
     duration: Long,
     updateShuffle: () -> Unit,
     updateRepeat: () -> Unit,
+    updateSliderDraggedState: (Boolean) -> Unit,
     isShuffle: Boolean,
     shouldRepeat: Boolean,
     skipBackward: () -> Unit,
@@ -605,6 +635,7 @@ private fun PortraitExpandedScreen(
             duration,
             updateShuffle,
             updateRepeat,
+            updateSliderDraggedState,
             isShuffle,
             shouldRepeat,
             skipBackward,

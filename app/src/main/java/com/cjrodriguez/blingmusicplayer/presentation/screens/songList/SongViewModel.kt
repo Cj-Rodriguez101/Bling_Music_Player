@@ -8,10 +8,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import androidx.paging.map
 import com.cjrodriguez.blingmusicplayer.datastore.SettingsDataStore
 import com.cjrodriguez.blingmusicplayer.interactors.PlayingStateIndicator
 import com.cjrodriguez.blingmusicplayer.model.Song
 import com.cjrodriguez.blingmusicplayer.model.SongWithFavourite
+import com.cjrodriguez.blingmusicplayer.model.SongWrapper
 import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.SongListEvents
 import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.SongListEvents.*
 import com.cjrodriguez.blingmusicplayer.repository.SongRepository
@@ -24,10 +26,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,40 +47,16 @@ class SongViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _query: MutableStateFlow<String> = MutableStateFlow("")
-    val query: StateFlow<String> = _query
+    val query: StateFlow<String> = _query.asStateFlow()
 
     private val _currentSong: MutableStateFlow<SongWithFavourite?> = MutableStateFlow(null)
-    val currentSong: StateFlow<SongWithFavourite?> = _currentSong
+    val currentSong: StateFlow<SongWithFavourite?> = _currentSong.asStateFlow()
 
     private val _shouldRepeat: MutableStateFlow<Boolean> = MutableStateFlow(false)
-    val shouldRepeat: StateFlow<Boolean> = _shouldRepeat
+    val shouldRepeat: StateFlow<Boolean> = _shouldRepeat.asStateFlow()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-//    val myMutablePagingFlow: Flow<PagingData<SongWrapper>> = _query
-//        .combine(_currentSong) { query, currentSong ->
-//            Pair(query, currentSong)
-//        }
-//        .flatMapLatest { (query, currentSong) ->
-//            songRepository.getSearchedSongs(query).mapLatest {
-//                it.map { song->
-//                    SongWrapper(song=song.song, isFavourite = song.isFavourite,
-//                        isSelectedSong = currentSong?.song?.id == song.song.id)
-//                }
-//            }.cachedIn(viewModelScope).distinctUntilChanged()
-//        }
-    val myMutablePagingFlow: Flow<PagingData<SongWithFavourite>> = _query.flatMapLatest {
-        songRepository.getSearchedSongs(it)
-            .cachedIn(viewModelScope).distinctUntilChanged()
-    }
-
-    val shouldUpdateFlow = settingsDataStore.shouldUpdateFlow.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(), false
-    )
-
-    private fun updateQuery(query: String) {
-        _query.value = query
-    }
+    private val _isSliderDragged: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val isSliderDragged: StateFlow<Boolean> = _isSliderDragged.asStateFlow()
 
     private val _isLoading: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -99,7 +80,47 @@ class SongViewModel @Inject constructor(
     val isShuffle: StateFlow<Boolean> = _isShuffle
 
     private val _currentPosition: MutableStateFlow<Float> = MutableStateFlow(0f)
-    val currentPosition: StateFlow<Float> = _currentPosition
+    val currentPosition: StateFlow<Float> = _currentPosition.asStateFlow()
+
+//    @OptIn(ExperimentalCoroutinesApi::class)
+//    val songsPagingFlow: Flow<PagingData<SongWrapper>> = _query
+//        .combine(_currentSong) { query, currentSong ->
+//            Pair(query, currentSong)
+//        }
+//        .flatMapLatest { (query, currentSong) ->
+//            songRepository.getSearchedSongs(query).mapLatest {
+//                it.map { song->
+//                    SongWrapper(song=song.song, isFavourite = song.isFavourite,
+//                        isSelectedSong = currentSong?.song?.id == song.song.id)
+//                }
+//            }.cachedIn(viewModelScope).distinctUntilChanged()
+//        }.cachedIn(viewModelScope).distinctUntilChanged()
+
+//    val songsPagingFlow: Flow<PagingData<SongWithFavourite>> =
+//        _query.flatMapLatest {
+//        songRepository.getSearchedSongs(it).cachedIn(viewModelScope).distinctUntilChanged()
+//
+//    }.cachedIn(viewModelScope)
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+    val songsPagingFlow: Flow<PagingData<SongWithFavourite>> =
+        _query.flatMapLatest {
+        songRepository.getSearchedSongs(it).cachedIn(viewModelScope).distinctUntilChanged()
+    }.cachedIn(viewModelScope)
+
+
+    val shouldUpdateFlow = settingsDataStore.shouldUpdateFlow.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(), false
+    )
+
+    private fun updateQuery(query: String) {
+        _query.value = query
+    }
+
+    fun updateSliderDragged(isSliderDragged: Boolean){
+        _isSliderDragged.value = isSliderDragged
+    }
 
     init {
         viewModelScope.launch {
@@ -138,6 +159,12 @@ class SongViewModel @Inject constructor(
                     }
                 }
             }
+
+//            launch {
+//                isSliderDragged.collectLatest {
+//                    Log.e("poter", "is sliding state $it")
+//                }
+//            }
 
             launch {
                 settingsDataStore.shouldUpdateFlow.collectLatest { shouldUpdate ->
@@ -195,7 +222,6 @@ class SongViewModel @Inject constructor(
                     }
                 }
             }
-
         }
     }
 
@@ -243,7 +269,6 @@ class SongViewModel @Inject constructor(
             CoroutineScope(Dispatchers.IO).launch {
                 songRepository.completeDeleteIfDialogComplete(songList).collectLatest {dataState->
                     dataState.message?.let { error ->
-                        //Log.e("TAG", "newSearch: insert")
                         appendToMessageQueue(error)
                         onTriggerEvent(GetSongs)
                         //messageQueue.add(error.build())
@@ -350,7 +375,6 @@ class SongViewModel @Inject constructor(
                 songRepository.setUnsetFavourite(song).collectLatest { dataState ->
 
                     dataState.data?.let {
-                        Log.e("favSongInside", it.toString())
                         setCurrentSong(it)
                     }
 

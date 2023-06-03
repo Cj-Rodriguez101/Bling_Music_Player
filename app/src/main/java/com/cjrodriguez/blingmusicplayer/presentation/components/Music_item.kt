@@ -15,6 +15,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,6 +38,7 @@ import coil.request.ImageRequest
 import com.cjrodriguez.blingmusicplayer.R
 import com.cjrodriguez.blingmusicplayer.model.Song
 import com.cjrodriguez.blingmusicplayer.model.SongWithFavourite
+import com.cjrodriguez.blingmusicplayer.model.SongWrapper
 
 @Composable
 fun Music_Item(
@@ -46,7 +48,6 @@ fun Music_Item(
 ) {
 
     var expanded by remember { mutableStateOf(false) }
-    //val context = LocalContext.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -79,6 +80,7 @@ fun Music_Item(
 
             Text(
                 text = song.song.artist, overflow = TextOverflow.Clip, maxLines = 1,
+                //color = if(song.isSelectedSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth(0.8f)
             )
         }

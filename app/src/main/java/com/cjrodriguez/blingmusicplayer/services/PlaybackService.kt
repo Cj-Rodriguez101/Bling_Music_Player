@@ -200,11 +200,11 @@ class PlaybackService : MediaLibraryService() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 CoroutineScope(Dispatchers.Main).launch {
                     songDao.getNextSong(
-                        player.currentMediaItem?.mediaMetadata?.extras?.getString("sortedUnSpacedTitle")
+                        player.currentMediaItem?.mediaMetadata?.extras?.getString(
+                            SORTED_SPACED_TITLE)
                             .toString(), 0L, dataStore.isShuffleFlow.first()
                     ).first()?.let {
                         it.let { song ->
-                            Log.e("serviceNext", song.song.title)
                             player.setMediaItem(song.song.mediaItem)
                             if (player.isPlaying) {
                                 player.prepareAndPlay()
@@ -354,7 +354,6 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        Log.e("peepee", "task ondestroy receive")
         //super.onTaskRemoved(rootIntent)
         mediaSession?.let { session ->
 //            if (!session.player.playWhenReady) {

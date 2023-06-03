@@ -41,9 +41,6 @@ fun VolumeDialog(
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var currentSeekBarVolume by remember { mutableFloatStateOf(volumeLevel) }
 
-    //val dialogWindowProvider = LocalView.current.parent as DialogWindowProvider
-//    dialogWindowProvider.window.setGravity(Gravity.BOTTOM)
-    Log.e("dialogtype", "${LocalView.current.parent}")
     LaunchedEffect(volumeLevel) {
         currentSeekBarVolume = volumeLevel
     }
@@ -120,7 +117,6 @@ fun VolumeDialog(
     LaunchedEffect(Unit) {
         while (true) {
             val currentTime = System.currentTimeMillis()
-            //Log.e("timer", "currentTime ${currentTime} lastinter ${lastInteractionTime}")
             if (currentTime - lastInteractionTime > 5000) {
                 onDismiss()
             }

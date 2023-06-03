@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,12 +29,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -48,9 +54,11 @@ import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.SongViewMo
 import com.cjrodriguez.blingmusicplayer.services.PlaybackService
 import com.cjrodriguez.blingmusicplayer.util.MediaContentObserver
 import com.cjrodriguez.blingmusicplayer.util.prepareAndPlay
+import com.cjrodriguez.blingmusicplayer.util.toSongWrapper
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -63,7 +71,15 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private lateinit var controllerFuture: ListenableFuture<MediaController>
     private val controller: MediaController?
-        get() = if (controllerFuture.isDone) controllerFuture.get() else null
+        get() = if (controllerFuture.isDone) {
+            try {
+                controllerFuture.get()
+            } catch (ex: Exception) {
+                null
+            }
+        } else {
+            null
+        }
 
     private val viewModel: SongViewModel by viewModels()
 
@@ -81,14 +97,12 @@ class MainActivity : ComponentActivity() {
 
     var mRunnable: Runnable? = null
     var mHandler: Handler? = null
-//    var looper: Looper? = null
 
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        //looper = Looper.getMainLooper()
         mHandler = Handler(Looper.getMainLooper())
 
         audioManager =
@@ -184,24 +198,36 @@ class MainActivity : ComponentActivity() {
             val itemToDelete: MutableState<Song?> = rememberSaveable {
                 mutableStateOf(null)
             }
+            val allSongs = viewModel.songsPagingFlow.collectAsLazyPagingItems()
+            val sliderPosition by viewModel.currentPosition.collectAsState()
+
+            val isPlaying by viewModel.isPlaying.collectAsState()
+            val shouldUpdate by viewModel.shouldUpdateFlow.collectAsState()
+            val currentSong by viewModel.currentSong.collectAsState()
+            val nextSong by viewModel.nextSong.collectAsState()
+            val previousSong by viewModel.previousSong.collectAsState()
+            val isLoading by viewModel.isLoading.collectAsState()
+            val messageSet by viewModel.messageSet.collectAsState()
+            val query by viewModel.query.collectAsState()
+            val isShuffle by viewModel.isShuffle.collectAsState()
+            val shouldRepeat by viewModel.shouldRepeat.collectAsState()
             NavHost(navController = navController, startDestination = Screen.SongList.route) {
                 composable(route = Screen.SongList.route) {
 
-                    val sliderPosition = viewModel.currentPosition.collectAsState().value
                     SongListScreen(
                         onTriggerEvent = viewModel::onTriggerEvent,
-                        isPlaying = viewModel.isPlaying.collectAsState().value,
-                        shouldUpdate = viewModel.shouldUpdateFlow.collectAsState().value,
-                        currentSongMediaItem = viewModel.currentSong.collectAsState().value,
-                        nextSongMediaItem = viewModel.nextSong.collectAsState().value,
-                        prevSongMediaItem = viewModel.previousSong.collectAsState().value,
-                        itemSongs = viewModel.myMutablePagingFlow.collectAsLazyPagingItems(),
-                        isLoading = viewModel.isLoading.collectAsState().value,
-                        messageSet = viewModel.messageSet.collectAsState().value,
-                        query = viewModel.query.collectAsState().value,
+                        isPlaying = isPlaying,
+                        shouldUpdate = shouldUpdate,
+                        currentSongMediaItem = currentSong?.toSongWrapper(),
+                        nextSongMediaItem = nextSong,
+                        prevSongMediaItem = previousSong,
+                        itemSongs = allSongs,
+                        isLoading = isLoading,
+                        messageSet = messageSet,
+                        query = query,
                         controller = controller,
-                        isShuffle = viewModel.isShuffle.collectAsState().value,
-                        shouldRepeat = viewModel.shouldRepeat.collectAsState().value,
+                        isShuffle = isShuffle,
+                        shouldRepeat = shouldRepeat,
                         onUpdateSliderPosition = {
                             viewModel.updatePosition(it.toFloat())
                         },
@@ -211,14 +237,22 @@ class MainActivity : ComponentActivity() {
                             controller?.let {
 
                                 viewModel.currentSong.value?.let {
-                                    if (pos != null) {
-                                        controller?.setMediaItem(it.song.mediaItem)
-                                    } else {
-                                        controller?.setMediaItem(
-                                            it.song.mediaItem,
-                                            sliderPosition.toLong()
-                                        )
-                                    }
+                                    //if (pos != null) {
+                                    controller?.setMediaItem(it.song.mediaItem)
+                                    //} else {
+                                    controller?.setMediaItem(
+                                        it.song.mediaItem,
+                                        pos
+                                    )
+                                    //}
+                                    Log.e(
+                                        "oppp",
+                                        "pos ${pos.toString()} slider ${sliderPosition.toString()}"
+                                    )
+//                                    controller?.setMediaItem(
+//                                        it.song.mediaItem,
+//                                        sliderPosition.toLong()
+//                                    )
                                     controller?.prepareAndPlay()
                                     viewModel.updateIsPlaying(true)
                                 }
@@ -238,6 +272,9 @@ class MainActivity : ComponentActivity() {
                         },
                         openDeleteDialog = {
                             displayDeleteDialog.value = true
+                        },
+                        updateSliderDraggedState = {
+                            viewModel.updateSliderDragged(it)
                         },
                         currentVolume = currentVolume.toFloat(),
                         maxVolume = maxVolume.intValue.toFloat(),
@@ -271,29 +308,55 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setController() {
+        val controller = this.controller ?: return
         updatePlayingState?.let {
-            this.controller?.addListener(it)
+            controller.addListener(it)
         }
 
-        viewModel.updateIsPlaying(this.controller?.isPlaying ?: false)
+        viewModel.updateIsPlaying(controller.isPlaying ?: false)
 
         lifecycleScope.launch {
+//            viewModel.isPlaying.collectLatest { isPlaying ->
+//                if (isPlaying) {
+//                    mRunnable = object : Runnable {
+//                        override fun run() {
+//                            if (!viewModel.isSliderDragged.value) {
+//                                controller.currentPosition.let { pos ->
+//                                    //Log.e("firsthere", pos.toString()+"sliderPosition ${viewModel.currentPosition.value}")
+//                                    val position = viewModel.currentPosition.value
+//                                    pos.let {
+//                                        viewModel.updatePosition(if (pos <= 0L) position else it.toFloat())
+//                                    }
+//                                }
+//                            }
+//                            mHandler?.postDelayed(this, 1000)
+//                        }
+//                    }
+//                    mRunnable?.run()
+//                } else {
+//                    mRunnable?.let {
+//                        mHandler?.removeCallbacks(it)
+//                    }
+//                }
+//            }
+
+            //new
             viewModel.isPlaying.collectLatest { isPlaying ->
                 if (isPlaying) {
-                    mRunnable = object : Runnable {
-                        override fun run() {
-                            controller?.currentPosition.let { pos ->
-                                pos?.let {
-                                    viewModel.updatePosition(it.toFloat())
+                    launch {
+                        while(true){
+                            if (!viewModel.isSliderDragged.value) {
+                                controller.currentPosition.let { pos ->
+                                    //Log.e("firsthere", pos.toString()+"sliderPosition ${viewModel.currentPosition.value}")
+                                    val position = viewModel.currentPosition.value
+                                    pos.let {
+                                        viewModel.updatePosition(if (pos <= 0L) position else it.toFloat())
+                                    }
                                 }
                             }
-                            mHandler?.postDelayed(this, 1000)
+
+                            delay(1000L)
                         }
-                    }
-                    mRunnable?.run()
-                } else {
-                    mRunnable?.let {
-                        mHandler?.removeCallbacks(it)
                     }
                 }
             }
@@ -302,7 +365,7 @@ class MainActivity : ComponentActivity() {
 
 
         viewModel.currentSong.value.let { currentSong ->
-            controller?.currentMediaItem?.let { mediaItem ->
+            controller.currentMediaItem?.let { mediaItem ->
                 if (currentSong?.song?.data != mediaItem.mediaId) {
                     viewModel.getAndUpdateCurrentSongIfExists(
                         mediaItem.mediaId.substringAfterLast("/").toLongOrNull() ?: 0L
@@ -328,13 +391,15 @@ class MainActivity : ComponentActivity() {
                 router: MediaRouter?,
                 type: Int,
                 info: MediaRouter.RouteInfo?
-            ) {}
+            ) {
+            }
 
             override fun onRouteUnselected(
                 router: MediaRouter?,
                 type: Int,
                 info: MediaRouter.RouteInfo?
-            ) {}
+            ) {
+            }
 
             override fun onRouteAdded(router: MediaRouter?, info: MediaRouter.RouteInfo?) {}
 
@@ -347,13 +412,15 @@ class MainActivity : ComponentActivity() {
                 info: MediaRouter.RouteInfo?,
                 group: MediaRouter.RouteGroup?,
                 index: Int
-            ) {}
+            ) {
+            }
 
             override fun onRouteUngrouped(
                 router: MediaRouter?,
                 info: MediaRouter.RouteInfo?,
                 group: MediaRouter.RouteGroup?
-            ) {}
+            ) {
+            }
 
             override fun onRouteVolumeChanged(router: MediaRouter?, info: MediaRouter.RouteInfo?) {
                 viewModel.updateCurrentVolume(audioManager?.getStreamVolume(STREAM_MUSIC) ?: 0)
@@ -382,25 +449,49 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        lifecycleScope.launch {
-            viewModel.isPlaying.collectLatest { isPlaying ->
-                if (isPlaying) {
-                    mRunnable = object : Runnable {
-                        override fun run() {
-                            controller?.currentPosition?.let { pos ->
-                                    viewModel.updatePosition(pos.toFloat())
-                            }
-                            mHandler?.postDelayed(this, 1000)
-                        }
-                    }
-                    mRunnable?.run()
-                } else {
-                    mRunnable?.let {
-                        mHandler?.removeCallbacks(it)
-                    }
-                }
-            }
-        }
+        //lifecycleScope.launch {
+//            viewModel.isPlaying.collectLatest { isPlaying ->
+//                if (isPlaying) {
+//                    mRunnable = object : Runnable {
+//                        override fun run() {
+//                            if (!viewModel.isSliderDragged.value) {
+//                                controller?.currentPosition.let { pos ->
+//                                    //Log.e("firsthere", pos.toString()+"sliderPosition ${viewModel.currentPosition.value}")
+//                                    val position = viewModel.currentPosition.value
+//                                    pos?.let {
+//                                        viewModel.updatePosition(if (pos <= 0L) position else it.toFloat())
+//                                    }
+//                                }
+//                            }
+//                            mHandler?.postDelayed(this, 1000)
+//                        }
+//                    }
+//                    mRunnable?.run()
+//                } else {
+//                    mRunnable?.let {
+//                        mHandler?.removeCallbacks(it)
+//                    }
+//                }
+//            }
+
+
+            //NEW
+//            launch {
+//                while(true){
+//                    if (!viewModel.isSliderDragged.value) {
+//                        controller?.currentPosition.let { pos ->
+//                            //Log.e("firsthere", pos.toString()+"sliderPosition ${viewModel.currentPosition.value}")
+//                            val position = viewModel.currentPosition.value
+//                            pos?.let {
+//                                viewModel.updatePosition(if (pos <= 0L) position else it.toFloat())
+//                            }
+//                        }
+//                    }
+//
+//                    delay(1000L)
+//                }
+//            }
+        //}
     }
 
     override fun onDestroy() {
