@@ -1,5 +1,6 @@
 package com.cjrodriguez.blingmusicplayer.services
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -15,7 +16,6 @@ import android.graphics.ImageDecoder
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -53,11 +53,13 @@ import javax.inject.Inject
 
 private const val REWIND = "REWIND"
 private const val FAST_FWD = "FAST_FWD"
+private const val PLAY = "PLAY"
 private const val CHANNEL_NAME = "BlingMusicChannel"
 private const val CHANNEL_ID = "BlingMusicID"
 private const val CHANNEL_DESCRIPTION = "BlingMusicChannel"
 
 @androidx.media3.common.util.UnstableApi
+@SuppressLint("PrivateResource")
 @AndroidEntryPoint
 class PlaybackService : MediaLibraryService() {
 
@@ -95,7 +97,8 @@ class PlaybackService : MediaLibraryService() {
         customCommands = listOf(
             getRewindCommandButton(
                 SessionCommand(REWIND, Bundle.EMPTY)
-            ), getFastForwardCommandButton(
+            ),
+            getFastForwardCommandButton(
                 SessionCommand(FAST_FWD, Bundle.EMPTY)
             )
         )
@@ -109,13 +112,10 @@ class PlaybackService : MediaLibraryService() {
                             CoroutineScope(Dispatchers.Main).launch {
                                 val shouldRepeat = dataStore.shouldRepeatFlow.first()
                                 if (!shouldRepeat) {
-                                    songDao.getNextSong(
-                                        player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
-                                            .toString(), 0L, dataStore.isShuffleFlow.first()
-                                    ).first().let {
+                                    getNextSongIfExists(player, dataStore.isShuffleFlow.first()).let {
                                         it?.let { song ->
                                             player.setMediaItem(song.song.mediaItem)
-                                            if (player.isPlaying) {
+                                            if (playingStateIndicator.isPlaying.value) {
                                                 player.prepareAndPlay()
                                             }
                                         }
@@ -135,6 +135,16 @@ class PlaybackService : MediaLibraryService() {
                 return super.getAvailableCommands().buildUpon().remove(COMMAND_SEEK_TO_PREVIOUS)
                     .remove(COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).remove(COMMAND_SEEK_TO_NEXT)
                     .remove(COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).build()
+            }
+
+            override fun play() {
+                super.play()
+                playingStateIndicator.isPlaying.value = true
+            }
+
+            override fun pause() {
+                super.pause()
+                playingStateIndicator.isPlaying.value = false
             }
         }
         modifiedPlayer.addListener(playerListener!!)
@@ -157,27 +167,10 @@ class PlaybackService : MediaLibraryService() {
         rewindBroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 CoroutineScope(Dispatchers.Main).launch {
-//                    songDao.getPreviousSong(
-//                        player.mediaMetadata.extras?.getString("sortedUnSpacedTitle")
-//                            .toString(), 0L
-//                    ).collectLatest {
-//                        it?.let { song ->
-//                            player.setMediaItem(song.song.mediaItem)
-//                            if (player.isPlaying) {
-//                                if (player.playbackState == Player.STATE_IDLE) {
-//                                    player.prepare()
-//                                }
-//                                player.play()
-//                            }
-//                        }
-//                    }
-                    songDao.getPreviousSong(
-                        player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
-                            .toString(), 0L
-                    ).first()?.let {
+                    getPreviousSongIfExists(player)?.let {
                         it.let { song ->
                             player.setMediaItem(song.song.mediaItem)
-                            if (player.isPlaying) {
+                            if (playingStateIndicator.isPlaying.value) {
                                 player.prepareAndPlay()
                             }
                         }
@@ -199,14 +192,10 @@ class PlaybackService : MediaLibraryService() {
         fastForwardBroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 CoroutineScope(Dispatchers.Main).launch {
-                    songDao.getNextSong(
-                        player.currentMediaItem?.mediaMetadata?.extras?.getString(
-                            SORTED_SPACED_TITLE)
-                            .toString(), 0L, dataStore.isShuffleFlow.first()
-                    ).first()?.let {
+                    getNextSongIfExists(player, dataStore.isShuffleFlow.first())?.let {
                         it.let { song ->
                             player.setMediaItem(song.song.mediaItem)
-                            if (player.isPlaying) {
+                            if (playingStateIndicator.isPlaying.value) {
                                 player.prepareAndPlay()
                             }
                         }
@@ -215,9 +204,9 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
-        registerReceiver(rewindBroadcastReceiver, IntentFilter("REWIND"))
-        registerReceiver(playPauseBroadcastReceiver, IntentFilter("PLAY"))
-        registerReceiver(fastForwardBroadcastReceiver, IntentFilter("FAST_FWD"))
+        registerReceiver(rewindBroadcastReceiver, IntentFilter(REWIND))
+        registerReceiver(playPauseBroadcastReceiver, IntentFilter(PLAY))
+        registerReceiver(fastForwardBroadcastReceiver, IntentFilter(FAST_FWD))
 
         setMediaNotificationProvider(object : MediaNotification.Provider {
             override fun createNotification(
@@ -240,32 +229,23 @@ class PlaybackService : MediaLibraryService() {
         })
     }
 
+    private suspend fun getPreviousSongIfExists(player: Player) =
+        songDao.getPreviousSong(
+            player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
+                .toString(), 0L
+        ).first()
+
+    private suspend fun getNextSongIfExists(player: Player, shouldShuffle: Boolean) =
+        songDao.getNextSong(
+            player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
+                .toString(), 0L, shouldShuffle
+        ).first()
+
     @OptIn(ExperimentalComposeUiApi::class)
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
         super.onUpdateNotification(session, startInForegroundRequired)
-        //super.onUpdateNotification(session)
-        //makeStatusNotification(session)
-        //if(startInForegroundRequired){
-        //makeStatusNotification(session)
-        //startForeground(notification.notificationId, notification.notification)
-        //}
     }
 
-//        @OptIn(ExperimentalComposeUiApi::class)
-//    override fun onUpdateNotification(session: MediaSession) {
-//            super.onUpdateNotification(session)
-//        makeStatusNotification(session)
-//    }
-
-
-//    @OptIn(ExperimentalComposeUiApi::class)
-//    @SuppressLint("UnsafeOptInUsageError")
-//    private fun updateNotification(session: MediaSession): MediaNotification {
-//        return makeStatusNotification(session)
-//    }
-
-
-    @OptIn(ExperimentalMaterialApi::class, ExperimentalMaterial3Api::class)
     @ExperimentalComposeUiApi
     @androidx.media3.common.util.UnstableApi
     fun makeStatusNotification(session: MediaSession): MediaNotification {
@@ -291,16 +271,8 @@ class PlaybackService : MediaLibraryService() {
             FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE
         )
 
-//        val pendingIntent =
-//            TaskStackBuilder.create(this@PlaybackService).run {
-//                addNextIntent(Intent(this@PlaybackService, MainActivity::class.java))
-//
-//                val immutableFlag = if (Build.VERSION.SDK_INT >= 23) FLAG_IMMUTABLE else 0
-//                getPendingIntent(0, immutableFlag or FLAG_UPDATE_CURRENT)
-//            }
-
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.music_icon)
             .setLargeIcon(
                 try {
                     session.player.mediaMetadata.artworkUri?.let {
@@ -340,7 +312,7 @@ class PlaybackService : MediaLibraryService() {
                     != Player.STATE_BUFFERING) R.drawable.baseline_play_arrow_24
                 else androidx.media3.ui.R.drawable.exo_icon_pause,
                 getString(R.string.play) + "/" + getString(R.string.pause),
-                getBroadcast(context, 5, Intent("PLAY"),
+                getBroadcast(context, 5, Intent(PLAY),
                     FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
             ).addAction(
                 R.drawable.skip_forward,
@@ -355,10 +327,7 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         //super.onTaskRemoved(rootIntent)
-        mediaSession?.let { session ->
-//            if (!session.player.playWhenReady) {
-//                stopSelf()
-//            }
+        mediaSession?.let {
             stopSelf()
         }
     }
@@ -401,33 +370,17 @@ class PlaybackService : MediaLibraryService() {
             )
         }
 
-//        override fun onPostConnect(session: MediaSession, controller: MediaSession.ControllerInfo) {
-//            if (!customLayout.isEmpty()) {
-//                //mediaSession?.setCustomLayout(customLayout)
-//                //mediaSession?.setCustomLayout(controller, customLayout)
-////                 Let Media3 controller (for instance the MediaNotificationProvider) know about the custom
-////                 layout right after it connected.
-//                //ignoreFuture(mediaSession?.setCustomLayout(controller, customLayout))
-//            }
-//        }
-
         override fun onCustomCommand(
             session: MediaSession,
             controller: MediaSession.ControllerInfo,
             customCommand: SessionCommand,
             args: Bundle
         ): ListenableFuture<SessionResult> {
+            val player = session.player
             if (customCommand.customAction == REWIND) {
-                val player = session.player
 
                 CoroutineScope(Dispatchers.Main).launch {
-//                    songDao.getPreviousSong(player.mediaMetadata.title.toString(), 0L)
-//                        .collectLatest {
-
-                    songDao.getPreviousSong(
-                        player.mediaMetadata.extras?.getString("sortedUnSpacedTitle")
-                            .toString(), 0L
-                    ).first()?.let {
+                    getPreviousSongIfExists(session.player)?.let {
                         it.let { song ->
                             player.setMediaItem(song.song.mediaItem)
                             if (player.isPlaying) {
@@ -435,15 +388,10 @@ class PlaybackService : MediaLibraryService() {
                             }
                         }
                     }
-                    //}
                 }
             } else {
-                val player = session.player
                 CoroutineScope(Dispatchers.Main).launch {
-                    songDao.getNextSong(
-                        player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
-                            .toString(), 0L, dataStore.isShuffleFlow.first()
-                    ).first()?.let { song ->
+                    getNextSongIfExists(player, dataStore.isShuffleFlow.first())?.let { song ->
                         player.setMediaItem(song.song.mediaItem)
                         if (player.isPlaying) {
                             player.prepareAndPlay()
@@ -469,7 +417,6 @@ class PlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(updatedMediaItems)
         }
     }
-
     private fun getRewindCommandButton(sessionCommand: SessionCommand): CommandButton {
         return CommandButton.Builder().setDisplayName(
             applicationContext.getString(R.string.previous)

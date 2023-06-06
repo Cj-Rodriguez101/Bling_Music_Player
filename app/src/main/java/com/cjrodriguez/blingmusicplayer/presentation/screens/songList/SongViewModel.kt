@@ -1,23 +1,33 @@
 package com.cjrodriguez.blingmusicplayer.presentation.screens.songList
 
+import android.content.res.TypedArray
+import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.IntentSenderRequest
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.ColorUtils
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import androidx.paging.map
+import androidx.palette.graphics.Palette
+import com.cjrodriguez.blingmusicplayer.BaseApplication
+import com.cjrodriguez.blingmusicplayer.R
 import com.cjrodriguez.blingmusicplayer.datastore.SettingsDataStore
 import com.cjrodriguez.blingmusicplayer.interactors.PlayingStateIndicator
 import com.cjrodriguez.blingmusicplayer.model.Song
 import com.cjrodriguez.blingmusicplayer.model.SongWithFavourite
-import com.cjrodriguez.blingmusicplayer.model.SongWrapper
+import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.components.adjustAlpha
 import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.SongListEvents
 import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.SongListEvents.*
+import com.cjrodriguez.blingmusicplayer.presentation.theme.Purple80
 import com.cjrodriguez.blingmusicplayer.repository.SongRepository
 import com.cjrodriguez.blingmusicplayer.util.GenericMessageInfo
+import com.google.android.material.color.DynamicColors
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,22 +38,21 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+
 
 @androidx.media3.common.util.UnstableApi
 @HiltViewModel
 class SongViewModel @Inject constructor(
     private val songRepository: SongRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val playingStateIndicator: PlayingStateIndicator
+    private val playingStateIndicator: PlayingStateIndicator,
+    private val baseApplication: BaseApplication
 ) : ViewModel() {
 
     private val _query: MutableStateFlow<String> = MutableStateFlow("")
@@ -61,6 +70,9 @@ class SongViewModel @Inject constructor(
     private val _isLoading: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    private val _isPermissionGranted: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val isPermissionGranted: StateFlow<Boolean> = _isPermissionGranted
+
     private val _currentVolume: MutableStateFlow<Int> = MutableStateFlow(0)
     val currentVolume: StateFlow<Int> = _currentVolume
 
@@ -74,7 +86,11 @@ class SongViewModel @Inject constructor(
     private val _previousSong: MutableStateFlow<SongWithFavourite?> = MutableStateFlow(null)
     val previousSong: StateFlow<SongWithFavourite?> = _previousSong
 
-    val isPlaying: StateFlow<Boolean> = playingStateIndicator.isPlaying.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), false)
+    val isPlaying: StateFlow<Boolean> = playingStateIndicator.isPlaying.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(),
+        false
+    )
 
     private val _isShuffle: MutableStateFlow<Boolean> = MutableStateFlow(false)
     val isShuffle: StateFlow<Boolean> = _isShuffle
@@ -82,43 +98,23 @@ class SongViewModel @Inject constructor(
     private val _currentPosition: MutableStateFlow<Float> = MutableStateFlow(0f)
     val currentPosition: StateFlow<Float> = _currentPosition.asStateFlow()
 
-//    @OptIn(ExperimentalCoroutinesApi::class)
-//    val songsPagingFlow: Flow<PagingData<SongWrapper>> = _query
-//        .combine(_currentSong) { query, currentSong ->
-//            Pair(query, currentSong)
-//        }
-//        .flatMapLatest { (query, currentSong) ->
-//            songRepository.getSearchedSongs(query).mapLatest {
-//                it.map { song->
-//                    SongWrapper(song=song.song, isFavourite = song.isFavourite,
-//                        isSelectedSong = currentSong?.song?.id == song.song.id)
-//                }
-//            }.cachedIn(viewModelScope).distinctUntilChanged()
-//        }.cachedIn(viewModelScope).distinctUntilChanged()
+    private val _globalColorBackgroundInt: MutableStateFlow<Int?> = MutableStateFlow(null)
+    val globalColorBackgroundInt = _globalColorBackgroundInt.asStateFlow()
 
-//    val songsPagingFlow: Flow<PagingData<SongWithFavourite>> =
-//        _query.flatMapLatest {
-//        songRepository.getSearchedSongs(it).cachedIn(viewModelScope).distinctUntilChanged()
-//
-//    }.cachedIn(viewModelScope)
+    private val _isButtonsLight: MutableStateFlow<Boolean> = MutableStateFlow(false)
+    val isButtonsLight = _isButtonsLight.asStateFlow()
 
-        @OptIn(ExperimentalCoroutinesApi::class)
+    @OptIn(ExperimentalCoroutinesApi::class)
     val songsPagingFlow: Flow<PagingData<SongWithFavourite>> =
         _query.flatMapLatest {
-        songRepository.getSearchedSongs(it).cachedIn(viewModelScope).distinctUntilChanged()
-    }.cachedIn(viewModelScope)
-
-
-    val shouldUpdateFlow = settingsDataStore.shouldUpdateFlow.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(), false
-    )
+            songRepository.getSearchedSongs(it)
+        }.cachedIn(viewModelScope)
 
     private fun updateQuery(query: String) {
         _query.value = query
     }
 
-    fun updateSliderDragged(isSliderDragged: Boolean){
+    fun updateSliderDragged(isSliderDragged: Boolean) {
         _isSliderDragged.value = isSliderDragged
     }
 
@@ -126,20 +122,26 @@ class SongViewModel @Inject constructor(
         viewModelScope.launch {
 
             launch {
+                settingsDataStore.firstTimePermissionFlow.collectLatest {
+                    _isPermissionGranted.value = it != "ACCEPT"
+                }
+            }
+
+            launch {
                 settingsDataStore.isShuffleFlow.collectLatest {
                     _isShuffle.value = it
                     currentSong.value?.let { song ->
-                            _previousSong.value =
-                                songRepository.getPreviousSong(
-                                    song.song.sortedUnSpacedTitle,
-                                    song.song.id
-                                )
-                                    .first()
-                            _nextSong.value = songRepository.getNextSong(
+                        _previousSong.value =
+                            songRepository.getPreviousSong(
                                 song.song.sortedUnSpacedTitle,
-                                song.song.id,
-                                isShuffle.value
-                            ).first()
+                                song.song.id
+                            )
+                                .first()
+                        _nextSong.value = songRepository.getNextSong(
+                            song.song.sortedUnSpacedTitle,
+                            song.song.id,
+                            isShuffle.value
+                        ).first()
 
                     }
                 }
@@ -148,6 +150,9 @@ class SongViewModel @Inject constructor(
             launch {
                 _currentSong.collectLatest { song ->
                     song?.let {
+
+                        setBackgroundColorBasedOnCurrentSong(song)
+
                         _previousSong.value =
                             songRepository.getPreviousSong(it.song.sortedUnSpacedTitle, it.song.id)
                                 .first()
@@ -160,17 +165,10 @@ class SongViewModel @Inject constructor(
                 }
             }
 
-//            launch {
-//                isSliderDragged.collectLatest {
-//                    Log.e("poter", "is sliding state $it")
-//                }
-//            }
-
             launch {
                 settingsDataStore.shouldUpdateFlow.collectLatest { shouldUpdate ->
                     if (shouldUpdate) {
                         onTriggerEvent(GetSongs)
-                    } else {
                         settingsDataStore.writeShouldUpdate(false)
                     }
                 }
@@ -185,6 +183,55 @@ class SongViewModel @Inject constructor(
 
         checkIfMediaItemsShouldUpdate(!settingsDataStore.readShouldUpdate())
         updateCurrentSong()
+    }
+
+    private fun setBackgroundColorBasedOnCurrentSong(song: SongWithFavourite) {
+        _globalColorBackgroundInt.value = try {
+            var colorToReturn: Int? = null
+            val map = MediaStore.Images.Media.getBitmap(
+                baseApplication.applicationContext.contentResolver,
+                Uri.parse(song.song.albumId)
+            )
+            map?.let { ap ->
+                Palette.from(ap).generate().dominantSwatch?.let { swatch ->
+                    colorToReturn = adjustAlpha(swatch.rgb, 2f)
+                }
+            }
+            colorToReturn
+        } catch (ex: Exception) {
+            null
+        }
+
+        val primaryColorIfExist = if (DynamicColors.isDynamicColorAvailable()) {
+            val dynamicColorContext = DynamicColors.wrapContextIfAvailable(
+                baseApplication.applicationContext,
+                R.style.Theme_BlingMusicPlayer
+            )
+
+            val attrsToResolve = intArrayOf(
+                android.R.attr.colorPrimary
+            )
+
+            val ta: TypedArray =
+                dynamicColorContext.obtainStyledAttributes(attrsToResolve)
+            val primary = ta.getColor(0, 0)
+            ta.recycle()
+            primary
+        } else {
+            Purple80.toArgb()
+        }
+
+        val nullableColor = if (_globalColorBackgroundInt.value != null) {
+            _globalColorBackgroundInt.value
+        } else {
+            primaryColorIfExist
+        }
+
+        _isButtonsLight.value = nullableColor?.let {
+            ColorUtils.calculateLuminance(
+                Color(it).toArgb()
+            ) > 0.5
+        } ?: true
     }
 
     private fun checkIfMediaItemsShouldUpdate(isPermanentlyDeclined: Boolean) {
@@ -211,9 +258,7 @@ class SongViewModel @Inject constructor(
                 CoroutineScope(Dispatchers.IO).launch {
                     songRepository.getSingleSong(longId).collectLatest { dataState ->
 
-                        dataState.data.let { song ->
-                            setCurrentSong(song)
-                        }
+                        setCurrentSong(dataState.data)
 
                         dataState.message?.let { error ->
                             appendToMessageQueue(error)
@@ -231,7 +276,6 @@ class SongViewModel @Inject constructor(
                 songRepository.getSingleSong(songId).collectLatest { dataState ->
                     dataState.data?.let {
                         withContext(Dispatchers.Main) {
-                            //setCurrentSong(it)
                             _currentSong.value = it
                             settingsDataStore.writeLastPlayedSongId(it.song.id)
                         }
@@ -247,10 +291,10 @@ class SongViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             CoroutineScope(Dispatchers.IO).launch {
-                songRepository.deleteSong(songList, launcher).collectLatest {dataState->
+                songRepository.deleteSong(songList, launcher).collectLatest { dataState ->
 
                     dataState.data?.let {
-                        if (it){
+                        if (it) {
                             onTriggerEvent(GetSongs)
                         }
                     }
@@ -267,11 +311,10 @@ class SongViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             CoroutineScope(Dispatchers.IO).launch {
-                songRepository.completeDeleteIfDialogComplete(songList).collectLatest {dataState->
+                songRepository.completeDeleteIfDialogComplete(songList).collectLatest { dataState ->
                     dataState.message?.let { error ->
                         appendToMessageQueue(error)
                         onTriggerEvent(GetSongs)
-                        //messageQueue.add(error.build())
                     }
                 }
             }
@@ -282,9 +325,7 @@ class SongViewModel @Inject constructor(
         settingsDataStore.writeShouldUpdate(shouldUpdate)
     }
 
-    fun updateIsPlaying(isPlaying: Boolean) {
-        //settingsDataStore.writeIsPlaying(isPlaying)
-        //_isPlaying.value = isPlaying
+    private fun updateIsPlaying(isPlaying: Boolean) {
         playingStateIndicator.isPlaying.value = isPlaying
     }
 
@@ -307,11 +348,11 @@ class SongViewModel @Inject constructor(
                 updateSongs()
             }
 
-            is DeleteSong-> {
+            is DeleteSong -> {
                 deleteSong(events.songList, events.launcher)
             }
 
-            is CompleteDeleteSong-> {
+            is CompleteDeleteSong -> {
                 completeDeleteIfDialogComplete(events.songList)
             }
 
@@ -353,10 +394,6 @@ class SongViewModel @Inject constructor(
 
             is UpdateCurrentVolume -> {
                 updateCurrentVolume(events.currentVolume)
-            }
-
-            is GetMediaItemBasedOnUri -> {
-                //getMediaItemBasedOnUri(events.song)
             }
 
             OnRemoveHeadMessageFromQueue -> {
@@ -440,6 +477,54 @@ class SongViewModel @Inject constructor(
 //        }
         _currentSong.value = null
         _currentSong.value = song
+
+        song?.let {
+//            _globalColorBackgroundInt.value = try {
+//                var colorToReturn: Int? = null
+//                val map = MediaStore.Images.Media.getBitmap(
+//                    baseApplication.applicationContext.contentResolver,
+//                    Uri.parse(song.song.albumId)
+//                )
+//                map?.let { ap ->
+//                    Palette.from(ap).generate().dominantSwatch?.let { swatch ->
+//                        colorToReturn = adjustAlpha(swatch.rgb, 2f)
+//                    }
+//                }
+//                colorToReturn
+//            } catch (ex: Exception) {
+//                null
+//            }
+//
+//            val primaryColorIfExist = if (DynamicColors.isDynamicColorAvailable()) {
+//                val dynamicColorContext = DynamicColors.wrapContextIfAvailable(baseApplication.applicationContext, com.cjrodriguez.blingmusicplayer.R.style.Theme_BlingMusicPlayer)
+//
+//                val attrsToResolve = intArrayOf(
+//                    android.R.attr.colorPrimary
+//                )
+//
+//                val ta: TypedArray =
+//                    dynamicColorContext.obtainStyledAttributes(attrsToResolve)
+//                val primary = ta.getColor(0, 0)
+//                ta.recycle() // recycle TypedArray
+//                primary
+//
+//            } else {
+//                Purple80.toArgb()
+//            }
+//
+//           val nullableColor =  if(_globalColorBackgroundInt.value!=null){
+//                _globalColorBackgroundInt.value
+//            } else {
+//                primaryColorIfExist
+//            }
+//
+//            _isButtonsLight.value = nullableColor?.let { ColorUtils.calculateLuminance(
+//                Color(it).toArgb()
+//            ) > 0.5 }?:true
+
+            setBackgroundColorBasedOnCurrentSong(it)
+        }
+
         settingsDataStore.writeLastPlayedSongId(song?.song?.id ?: 0L)
 //        song?.let {
 //            settingsDataStore.writeLastPlayedSongId(it.song.id)

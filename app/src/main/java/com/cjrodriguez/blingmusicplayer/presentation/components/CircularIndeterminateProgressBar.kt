@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 
 @ExperimentalComposeUiApi
 @Composable
-fun CircularIndeterminateProgressBar(isDisplayed: Boolean) {
+fun CircularIndeterminateProgressBar(isDisplayed: Boolean = true) {
     if (isDisplayed) {
         Column(
             modifier = Modifier.fillMaxSize(),

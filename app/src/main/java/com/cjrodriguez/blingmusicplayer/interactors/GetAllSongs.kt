@@ -35,53 +35,53 @@ class GetAllSongs @Inject constructor(
         emit(DataState.loading())
 
         try {
-            if (!Util.checkReadPermission(context) && isPermanentlyDeclined) {
-                emit(
-                    DataState.error(
-                        message = GenericMessageInfo.Builder()
-                            .id("GetAllSongs").uiComponentType(UIComponentType.Dialog)
-                            .extraMessage("FirstPermission")
-                            .title(context.getString(R.string.info))
-                            .description(context.getString(R.string.must_grant_read_permission))
-                            .positive(
-                                positiveAction = PositiveAction(
-                                    positiveBtnTxt = context.getString(
-                                        R.string.request
-                                    )
-                                )
-                            )
-                            .negative(
-                                negativeAction = NegativeAction(
-                                    negativeBtnTxt = context.getString(
-                                        R.string.close
-                                    )
-                                )
-                            )
-                    )
-                )
-                return@flow
-            }
-            if (!Util.checkReadPermission(context) && !isPermanentlyDeclined) {
-                emit(
-                    DataState.error(
-                        message = GenericMessageInfo.Builder()
-                            .id("GetAllSongs").uiComponentType(UIComponentType.Dialog)
-                            .extraMessage("PermanentlyDeclinedPermission")
-                            .title(context.getString(R.string.info)).description(
-                                context.getString(R.string.it_seems_you_permanently_declined_storage) +" "+
-                                        context.getString(R.string.you_can_go_to_the_app_settings_to_grant_it)
-                            )
-                            .positive(
-                                positiveAction = PositiveAction(
-                                    positiveBtnTxt = context.getString(
-                                        R.string.ok
-                                    )
-                                )
-                            )
-                    )
-                )
-                return@flow
-            }
+//            if (!Util.checkReadPermission(context) && isPermanentlyDeclined) {
+//                emit(
+//                    DataState.error(
+//                        message = GenericMessageInfo.Builder()
+//                            .id("GetAllSongs").uiComponentType(UIComponentType.Dialog)
+//                            .extraMessage("FirstPermission")
+//                            .title(context.getString(R.string.info))
+//                            .description(context.getString(R.string.must_grant_read_permission))
+//                            .positive(
+//                                positiveAction = PositiveAction(
+//                                    positiveBtnTxt = context.getString(
+//                                        R.string.request
+//                                    )
+//                                )
+//                            )
+//                            .negative(
+//                                negativeAction = NegativeAction(
+//                                    negativeBtnTxt = context.getString(
+//                                        R.string.close
+//                                    )
+//                                )
+//                            )
+//                    )
+//                )
+//                return@flow
+//            }
+//            if (!Util.checkReadPermission(context) && !isPermanentlyDeclined) {
+//                emit(
+//                    DataState.error(
+//                        message = GenericMessageInfo.Builder()
+//                            .id("GetAllSongs").uiComponentType(UIComponentType.Dialog)
+//                            .extraMessage("PermanentlyDeclinedPermission")
+//                            .title(context.getString(R.string.info)).description(
+//                                context.getString(R.string.it_seems_you_permanently_declined_storage) +" "+
+//                                        context.getString(R.string.you_can_go_to_the_app_settings_to_grant_it)
+//                            )
+//                            .positive(
+//                                positiveAction = PositiveAction(
+//                                    positiveBtnTxt = context.getString(
+//                                        R.string.ok
+//                                    )
+//                                )
+//                            )
+//                    )
+//                )
+//                return@flow
+//            }
             val retrievedSongs: ArrayList<Song> = arrayListOf()
             val selection = MediaStore.Audio.Media.IS_MUSIC + " != 0"
             val projection = arrayOf(
@@ -179,7 +179,7 @@ class GetAllSongs @Inject constructor(
             songDao.deleteAllSongs()
             songDao.insertOrUpdateSongs(*retrievedSongs.toTypedArray())
 
-            emit(DataState.data(data = songDao.getAllSongs().first()))
+            emit(DataState.data(data = null))
         } catch (ex: Exception) {
             emit(
                 DataState.error(

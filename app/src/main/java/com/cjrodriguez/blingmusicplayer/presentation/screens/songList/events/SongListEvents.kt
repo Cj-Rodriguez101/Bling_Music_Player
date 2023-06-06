@@ -24,8 +24,6 @@ sealed class SongListEvents {
         val songList: List<Song>
     ): SongListEvents()
 
-    data class GetMediaItemBasedOnUri(val song: Song) : SongListEvents()
-
     data class SetIsAcceptedPermission(val isFirstPermission: String) : SongListEvents()
 
     data class UpdateCurrentSeekPosition(val position: Float) : SongListEvents()

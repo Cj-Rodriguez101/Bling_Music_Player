@@ -93,6 +93,14 @@ constructor(private val application: BaseApplication) {
         }
     }
 
+    fun readIfPermissionIsGranted(): Boolean{
+        var isPermissionGranted = false
+        runBlocking {
+            isPermissionGranted = firstTimePermissionFlow.first() != "ACCEPT"
+        }
+        return isPermissionGranted
+    }
+
     fun readLastPlayedSongId(): Long {
         var songID: Long
         runBlocking {

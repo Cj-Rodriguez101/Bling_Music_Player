@@ -1,6 +1,5 @@
 package com.cjrodriguez.blingmusicplayer.presentation.components
 
-import android.util.Log
 import android.view.Gravity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -49,7 +48,7 @@ fun VolumeDialog(
     Dialog(onDismissRequest = onDismiss) {
         val dialogWindowProvider = LocalView.current.parent as DialogWindowProvider
         dialogWindowProvider.window.setGravity(Gravity.TOP)
-        Column{
+        Column {
 
             Spacer(modifier = Modifier.height(80.dp))
             Column(
@@ -73,9 +72,8 @@ fun VolumeDialog(
                         updateSeekBar(currentSeekBarVolume)
                     },
                     colors = SliderDefaults.colors(
-                        thumbColor = Color.Magenta,
-                        activeTrackColor = Color.Magenta,
-                        //inactiveTickColor = Color.White
+                        thumbColor = Color.Blue,
+                        activeTrackColor = Color.Blue,
                     ),
                     valueRange = 0f..maxVolume, steps = maxVolume.toInt(),
                     modifier = Modifier
@@ -85,34 +83,6 @@ fun VolumeDialog(
             }
         }
     }
-//    AlertDialog(onDismissRequest = onDismiss,
-//        backgroundColor = MaterialTheme.colorScheme.background,
-//        contentColor = MaterialTheme.colorScheme.background,
-//        buttons = {}, text = {
-//        Column(
-//            modifier = Modifier.fillMaxSize(),
-//            verticalArrangement = Arrangement.Center,
-//            horizontalAlignment = Alignment.CenterHorizontally
-//        ) {
-//            Slider(
-//                value = currentSeekBarVolume,
-//                onValueChange = {
-//                    lastInteractionTime = System.currentTimeMillis()
-//                    currentSeekBarVolume = it
-//                },
-//                onValueChangeFinished = {
-//                    updateSeekBar(currentSeekBarVolume)
-//                },
-//                colors = SliderDefaults.colors(thumbColor = Color.Blue, activeTrackColor = Color.Blue),
-//                valueRange = 0f..maxVolume, steps = maxVolume.toInt(),
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//            )
-//        }
-//    }, modifier = Modifier//.customDialogModifier(CustomDialogPosition.TOP)
-//            .height(40.dp)
-//            .clip(RoundedCornerShape(100))
-//    )
 
     LaunchedEffect(Unit) {
         while (true) {

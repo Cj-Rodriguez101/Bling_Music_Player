@@ -3,6 +3,7 @@ package com.cjrodriguez.blingmusicplayer.presentation.components
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,12 +39,13 @@ import coil.request.ImageRequest
 import com.cjrodriguez.blingmusicplayer.R
 import com.cjrodriguez.blingmusicplayer.model.Song
 import com.cjrodriguez.blingmusicplayer.model.SongWithFavourite
-import com.cjrodriguez.blingmusicplayer.model.SongWrapper
 
 @Composable
 fun Music_Item(
     song: SongWithFavourite,
     deleteSong: () -> Unit,
+    isSelected: Boolean,
+    isPlaying: Boolean,
     onPlayClick: (song: Song) -> Unit = {},
 ) {
 
@@ -51,36 +53,44 @@ fun Music_Item(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
             .padding(bottom = 8.dp)
             .clickable {
                 onPlayClick(song.song)
             }) {
 
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(Uri.parse(song.song.albumId))
-                .build(),
-            error = painterResource(R.drawable.music_item_icon),
-            contentDescription = stringResource(R.string.album_art),
-            contentScale = ContentScale.Crop,
+        Box(
             modifier = Modifier
                 .size(50.dp)
-                .padding(end = 8.dp)
-                .clip(RoundedCornerShape(10.dp))
-        )
+                .padding(end = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(Uri.parse(song.song.albumId))
+                    .build(),
+                error = painterResource(R.drawable.music_item_icon),
+                contentDescription = stringResource(R.string.album_art),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            )
+        }
 
         Column {
             Text(
                 text = song.song.title, fontWeight = FontWeight.Bold,
                 overflow = TextOverflow.Clip, maxLines = 1,
-                //color = if(song.isSelectedSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth(0.9f)
             )
 
             Text(
                 text = song.song.artist, overflow = TextOverflow.Clip, maxLines = 1,
-                //color = if(song.isSelectedSong) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth(0.8f)
             )
         }

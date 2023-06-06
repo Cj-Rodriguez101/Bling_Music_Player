@@ -27,6 +27,4 @@ class ConverterHelper {
         val mediaItem = gsonParser.fromJson<MediaItem>(data, typeToken)
         return mediaItem?: MediaItem.EMPTY
     }
-
-
 }

@@ -17,6 +17,8 @@ import java.util.concurrent.TimeUnit
 const val FAVOURITES = "Favourites"
 const val ART_WORK_URI = "content://media/external/audio/albumart"
 const val SORTED_SPACED_TITLE = "sortedUnSpacedTitle"
+const val ACCEPT = "ACCEPT"
+const val REJECT = "REJECT"
 object Util {
 
     fun checkReadPermission(context: Context): Boolean {

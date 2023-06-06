@@ -1,9 +1,6 @@
-package com.cjrodriguez.blingmusicplayer.presentation.screens.singleSong
+package com.cjrodriguez.blingmusicplayer.presentation.screens.songList.components
 
 import android.content.res.Configuration.ORIENTATION_LANDSCAPE
-import android.net.Uri
-import android.provider.MediaStore
-import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -18,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.BottomSheetScaffoldState
 import androidx.compose.material.ExperimentalMaterialApi
@@ -25,8 +23,16 @@ import androidx.compose.material.Slider
 import androidx.compose.material.SliderDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.RepeatOne
+import androidx.compose.material.icons.outlined.Shuffle
+import androidx.compose.material.icons.outlined.ShuffleOn
 import androidx.compose.material.icons.outlined.VolumeMute
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Icon
@@ -34,34 +40,26 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.ColorUtils
-import androidx.media3.session.MediaController
-import androidx.palette.graphics.Palette
 import com.cjrodriguez.blingmusicplayer.R
 import com.cjrodriguez.blingmusicplayer.model.SongWithFavourite
 import com.cjrodriguez.blingmusicplayer.model.SongWrapper
 import com.cjrodriguez.blingmusicplayer.presentation.components.SongImage
-import com.cjrodriguez.blingmusicplayer.presentation.theme.Purple80
 import com.cjrodriguez.blingmusicplayer.util.Util
 import com.cjrodriguez.blingmusicplayer.util.toSongFavourite
 
@@ -69,7 +67,7 @@ import com.cjrodriguez.blingmusicplayer.util.toSongFavourite
 @ExperimentalFoundationApi
 @ExperimentalMaterialApi
 @Composable
-fun PlaySongScreen(
+fun SingleSongScreen(
     currentSong: SongWrapper,
     bottomSheetScaffoldState: BottomSheetScaffoldState,
     collapseExpandBottomSheet: (Boolean) -> Unit,
@@ -80,74 +78,32 @@ fun PlaySongScreen(
     setUnSetFavourite: (SongWithFavourite) -> Unit,
     updateShuffle: () -> Unit,
     updateRepeat: () -> Unit,
+    seekToPosition: (Long) -> Unit,
     updateSliderDraggedState: (Boolean) -> Unit,
     sliderPosition: Float,
     onUpdateSliderPosition: (Float) -> Unit,
-    controller: MediaController?,
     currentVolume: Int,
     isPlaying: Boolean,
     isShuffle: Boolean,
+    globalDynamicBackgroundColor: Color,
+    globalOnIconColor: Color,
     shouldRepeat: Boolean,
     duration: Long,
     onClick: () -> Unit,
 ) {
-    val context = LocalContext.current.applicationContext
     val config = LocalConfiguration.current
     val isSystemInDarkMode = isSystemInDarkTheme()
-    val bitmap: MutableState<Int?> = remember {
-        mutableStateOf(
-            try {
-                val map = MediaStore.Images.Media.getBitmap(
-                    context.contentResolver,
-                    Uri.parse(currentSong.song.albumId)
+
+    Column(
+        modifier = Modifier
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        globalDynamicBackgroundColor,
+                    ), tileMode = TileMode.Clamp, startY = 600f
                 )
-                map?.let { ap ->
-                    Palette.from(ap).generate().dominantSwatch?.let {
-                        adjustAlpha(it.rgb, 2f)
-                    }
-                }
-            } catch (ex: Exception) {
-                null
-            }
-        )
-    }
-
-    val colorOfText: MutableState<Color> = remember {
-        mutableStateOf(if (ColorUtils.calculateLuminance(bitmap.value?.let { Color(it).toArgb() }
-                ?: Purple80.toArgb()) < 0.5) Color.White else Color.Black)
-    }
-
-    LaunchedEffect(currentSong.song.albumId) {
-        bitmap.value = try {
-            val map = MediaStore.Images.Media.getBitmap(
-                context.contentResolver,
-                Uri.parse(currentSong.song.albumId)
             )
-            map?.let { ap ->
-                Palette.from(ap).generate().dominantSwatch?.let {
-                    adjustAlpha(it.rgb, 2f)
-                }
-            }
-        } catch (ex: Exception) {
-            null
-        }
-
-        colorOfText.value =
-            if (ColorUtils.calculateLuminance(bitmap.value?.let { Color(it).toArgb() }
-                    ?: Purple80.toArgb()) < 0.5) Color.White else Color.Black
-    }
-    //val yrs = MediaStore.Images.Media.getBitmap(context.getContentResolver(), Uri.parse(currentSong.song.albumId.toString()))
-    Column(modifier = Modifier//.clickable { onClick() }
-        .background(
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.background,
-                    bitmap.value?.let { Color(it) } ?: MaterialTheme.colorScheme.primary,
-                ), tileMode = TileMode.Clamp, startY = 600f
-            )
-            //color = bitmap.value?.let { Color(it) }?:MaterialTheme.colorScheme.primary
-        )
-        //.clickable { onClick() }
     ) {
         if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
             if (config.orientation != ORIENTATION_LANDSCAPE) {
@@ -158,7 +114,7 @@ fun PlaySongScreen(
                     currentSong,
                     setUnSetFavourite,
                     sliderPosition,
-                    { controller?.seekTo(it) },
+                    seekToPosition,
                     onUpdateSliderPosition,
                     duration,
                     updateShuffle,
@@ -169,6 +125,7 @@ fun PlaySongScreen(
                     skipBackward,
                     playOrPause,
                     isPlaying,
+                    globalOnIconColor,
                     skipForward,
                     isSystemInDarkMode
                 )
@@ -180,7 +137,7 @@ fun PlaySongScreen(
                     currentSong,
                     setUnSetFavourite,
                     sliderPosition,
-                    { controller?.seekTo(it) },
+                    seekToPosition,
                     onUpdateSliderPosition,
                     duration,
                     updateShuffle,
@@ -191,6 +148,7 @@ fun PlaySongScreen(
                     skipBackward,
                     playOrPause,
                     isPlaying,
+                    globalOnIconColor,
                     skipForward,
                     isSystemInDarkMode
                 )
@@ -222,21 +180,21 @@ fun PlaySongScreen(
                         modifier = Modifier
                             .basicMarquee(iterations = Int.MAX_VALUE)
                             .fillMaxWidth(),
-                        color = colorOfText.value
+                        color = globalOnIconColor
                     )
                     Text(
                         text = currentSong.song.artist,
                         maxLines = 1,
                         modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
-                        color = colorOfText.value
+                        color = globalOnIconColor
                     )
                 }
 
                 IconButton(onClick = skipBackward) {
                     Icon(
-                        painter = painterResource(id = R.drawable.skip_backward),
-                        contentDescription = "",
-                        tint = colorOfText.value
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = stringResource(id =R.string.previous),
+                        tint = globalOnIconColor
                     )
                 }
 
@@ -244,20 +202,19 @@ fun PlaySongScreen(
                     onClick = playOrPause
                 ) {
                     Icon(
-                        painter = if (!isPlaying)
-                            painterResource(id = R.drawable.baseline_play_arrow_24)
-                        else painterResource(
-                            id = androidx.media3.ui.R.drawable.exo_icon_pause
-                        ),
+                        imageVector = if (!isPlaying)
+                            Icons.Default.PlayArrow
+                        else Icons.Default.Pause,
                         contentDescription = "",
-                        tint = colorOfText.value
+                        tint = globalOnIconColor,
+                        modifier = Modifier.size(50.dp)
                     )
                 }
 
                 IconButton(onClick = skipForward) {
                     Icon(
-                        painter = painterResource(id = R.drawable.skip_forward),
-                        contentDescription = "", tint = colorOfText.value
+                        imageVector = Icons.Default.SkipNext,
+                        contentDescription = stringResource(id =R.string.next), tint = globalOnIconColor
                     )
 
                 }
@@ -286,6 +243,7 @@ private fun LandScapeExpandedScreen(
     skipBackward: () -> Unit,
     playOrPause: () -> Unit,
     isPlaying: Boolean,
+    globalColorOfSurface: Color,
     skipForward: () -> Unit,
     isSystemInDarkMode: Boolean
 ) {
@@ -315,7 +273,6 @@ private fun LandScapeExpandedScreen(
             }
         }
 
-        //
         Row(
             modifier = Modifier
                 .padding(16.dp)
@@ -376,168 +333,8 @@ private fun LandScapeExpandedScreen(
                     skipBackward,
                     playOrPause,
                     isPlaying,
-                    skipForward, isSystemInDarkMode
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MusicControlsSegment(
-    setUnSetFavourite: (SongWithFavourite) -> Unit,
-    currentSong: SongWrapper,
-    sliderPosition: Float,
-    controllerSeekTo: (Long) -> Unit,
-    onUpdateSliderPosition: (Float) -> Unit,
-    duration: Long,
-    updateShuffle: () -> Unit,
-    updateRepeat: () -> Unit,
-    updateSliderDraggedState: (Boolean) -> Unit,
-    isShuffle: Boolean,
-    shouldRepeat: Boolean,
-    skipBackward: () -> Unit,
-    playOrPause: () -> Unit,
-    isPlaying: Boolean,
-    skipForward: () -> Unit,
-    isSystemInDarkMode: Boolean
-) {
-    val pos = remember{ mutableFloatStateOf(0f) }
-    val timeString by remember (sliderPosition){
-        derivedStateOf {
-            Util.convertMillisecondLongToFormattedTimeString(sliderPosition.toLong())
-        }
-    }
-    val durationString by remember (duration){
-        derivedStateOf {
-            Util.convertMillisecondLongToFormattedTimeString(duration)
-        }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        IconButton(
-            onClick = { setUnSetFavourite(currentSong.toSongFavourite()) },
-            modifier = Modifier.padding(bottom = 16.dp)
-        ) {
-            if (currentSong.isFavourite == 0) {
-                Icon(
-                    imageVector = Icons.Outlined.Favorite,
-                    contentDescription = ""
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Filled.Favorite,
-                    tint = Color.White,
-                    contentDescription = ""
-                )
-            }
-
-        }
-
-        Slider(
-            value = sliderPosition,
-            modifier = Modifier.padding(start = 16.dp, end = 8.dp),
-            onValueChange = {
-                //controllerSeekTo(it.toLong())
-                updateSliderDraggedState(true)
-                onUpdateSliderPosition(it)
-                pos.floatValue = it
-            },
-            valueRange = 0f..duration.toFloat(),
-            onValueChangeFinished = {
-                //controllerSeekTo(sliderPosition.toLong())
-                controllerSeekTo(pos.floatValue.toLong())
-                //Log.e("poter", "onValueChangeFinished $sliderPosition pos ${pos.floatValue}")
-                updateSliderDraggedState(false)
-                //controllerSeekTo(sliderPosition.toLong())
-                //prepare controller if not prepared
-                //onUpdateSliderPosition(sliderPosition)
-                //controller?.seekTo(sliderPosition.toLong())
-                //seekToPosition()
-            },
-            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White)
-        )
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp)
-        ) {
-            Text(
-                text = timeString,
-                color = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = durationString,
-                color = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground
-            )
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            IconButton(
-                onClick = updateShuffle,
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = if (isShuffle)
-                        androidx.media3.ui.R.drawable.exo_legacy_controls_shuffle_on
-                    else androidx.media3.ui.R.drawable.exo_icon_shuffle_off),
-                    contentDescription = "",
-                    tint = if (isSystemInDarkMode) Color.White
-                    else MaterialTheme.colorScheme.onBackground
-                )
-            }
-
-            IconButton(
-                onClick = skipBackward,
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.skip_backward),
-                    tint = if (isSystemInDarkMode) Color.White
-                    else MaterialTheme.colorScheme.onBackground,
-                    contentDescription = ""
-                )
-            }
-
-            IconButton(
-                onClick = playOrPause,
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Icon(
-                    painter = if (!isPlaying) painterResource(id = R.drawable.baseline_play_arrow_24) else painterResource(
-                        id = androidx.media3.ui.R.drawable.exo_icon_pause
-                    ),
-                    tint = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground,
-                    contentDescription = ""
-                )
-            }
-
-            IconButton(
-                onClick = skipForward,
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.skip_forward),
-                    contentDescription = "",
-                    tint = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground
-                )
-            }
-
-            IconButton(
-                onClick = updateRepeat,
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = if (!shouldRepeat) androidx.media3.ui.R.drawable.exo_legacy_controls_repeat_all else androidx.media3.ui.R.drawable.exo_icon_repeat_one),
-                    contentDescription = "",
-                    tint = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground
+                    globalColorOfSurface,
+                    skipForward
                 )
             }
         }
@@ -564,6 +361,7 @@ private fun PortraitExpandedScreen(
     skipBackward: () -> Unit,
     playOrPause: () -> Unit,
     isPlaying: Boolean,
+    globalColorOfSurface: Color,
     skipForward: () -> Unit,
     isSystemInDarkMode: Boolean
 ) {
@@ -573,7 +371,6 @@ private fun PortraitExpandedScreen(
             .fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(
@@ -641,8 +438,159 @@ private fun PortraitExpandedScreen(
             skipBackward,
             playOrPause,
             isPlaying,
-            skipForward, isSystemInDarkMode
+            globalColorOfSurface,
+            skipForward
         )
+    }
+}
+
+@Composable
+private fun MusicControlsSegment(
+    setUnSetFavourite: (SongWithFavourite) -> Unit,
+    currentSong: SongWrapper,
+    sliderPosition: Float,
+    controllerSeekTo: (Long) -> Unit,
+    onUpdateSliderPosition: (Float) -> Unit,
+    duration: Long,
+    updateShuffle: () -> Unit,
+    updateRepeat: () -> Unit,
+    updateSliderDraggedState: (Boolean) -> Unit,
+    isShuffle: Boolean,
+    shouldRepeat: Boolean,
+    skipBackward: () -> Unit,
+    playOrPause: () -> Unit,
+    isPlaying: Boolean,
+    globalColorOfSurface: Color,
+    skipForward: () -> Unit,
+) {
+    var pos by remember { mutableFloatStateOf(0f) }
+    val timeString by remember(sliderPosition) {
+        derivedStateOf {
+            Util.convertMillisecondLongToFormattedTimeString(sliderPosition.toLong())
+        }
+    }
+    val durationString by remember(duration) {
+        derivedStateOf {
+            Util.convertMillisecondLongToFormattedTimeString(duration)
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        IconButton(
+            onClick = { setUnSetFavourite(currentSong.toSongFavourite()) },
+            modifier = Modifier.padding(bottom = 16.dp)
+        ) {
+            if (currentSong.isFavourite == 0) {
+                Icon(
+                    imageVector = Icons.Outlined.Favorite,
+                    contentDescription = stringResource(R.string.favourite)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Favorite,
+                    tint = Color.White,
+                    contentDescription = stringResource(R.string.unfavourite)
+                )
+            }
+
+        }
+
+        Slider(
+            value = sliderPosition,
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp),
+            onValueChange = {
+                updateSliderDraggedState(true)
+                onUpdateSliderPosition(it)
+                pos = it
+            },
+            valueRange = 0f..duration.toFloat(),
+            onValueChangeFinished = {
+                controllerSeekTo(pos.toLong())
+                updateSliderDraggedState(false)
+            },
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White)
+        )
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp)
+        ) {
+            Text(
+                text = timeString,
+                color = globalColorOfSurface
+            )
+            Text(
+                text = durationString,
+                color = globalColorOfSurface
+            )
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            IconButton(
+                onClick = updateShuffle,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = if (isShuffle)
+                        Icons.Outlined.ShuffleOn
+                    else Icons.Outlined.Shuffle,
+                    contentDescription = stringResource(R.string.shuffle),
+                    tint = globalColorOfSurface
+                )
+            }
+
+            IconButton(
+                onClick = skipBackward,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SkipPrevious,
+                    contentDescription = stringResource(id = R.string.previous),
+                    tint = globalColorOfSurface
+                )
+            }
+
+            IconButton(
+                onClick = playOrPause,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = if (!isPlaying) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    tint = globalColorOfSurface,
+                    contentDescription = stringResource(R.string.play_or_pause),
+                    modifier = Modifier.size(50.dp)
+                )
+            }
+
+            IconButton(
+                onClick = skipForward,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SkipNext,
+                    contentDescription = stringResource(id = R.string.next),
+                    tint = globalColorOfSurface
+                )
+            }
+
+            IconButton(
+                onClick = updateRepeat,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Icon(
+                    imageVector = if (!shouldRepeat) Icons.Outlined.Repeat else Icons.Outlined.RepeatOne,
+                    contentDescription = stringResource(R.string.repeat),
+                    tint = globalColorOfSurface
+                )
+            }
+        }
     }
 }
 

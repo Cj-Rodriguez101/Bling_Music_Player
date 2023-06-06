@@ -15,25 +15,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.BottomSheetScaffold
 import androidx.compose.material.BottomSheetScaffoldState
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.rememberBottomSheetScaffoldState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +42,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -54,9 +50,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.media3.session.MediaController
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.itemsIndexed
@@ -68,12 +61,14 @@ import com.cjrodriguez.blingmusicplayer.presentation.components.AreYouSureDelete
 import com.cjrodriguez.blingmusicplayer.presentation.components.Music_Item
 import com.cjrodriguez.blingmusicplayer.presentation.components.SearchAppBar
 import com.cjrodriguez.blingmusicplayer.presentation.components.VolumeDialog
-import com.cjrodriguez.blingmusicplayer.presentation.screens.singleSong.PlaySongScreen
+import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.components.SingleSongScreen
 import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.SongListEvents
 import com.cjrodriguez.blingmusicplayer.presentation.theme.BlingMusicPlayerTheme
+import com.cjrodriguez.blingmusicplayer.util.ACCEPT
 import com.cjrodriguez.blingmusicplayer.util.GenericMessageInfo
-import com.cjrodriguez.blingmusicplayer.util.prepareAndPlay
+import com.cjrodriguez.blingmusicplayer.util.REJECT
 import com.cjrodriguez.blingmusicplayer.util.toSongFavourite
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -90,61 +85,48 @@ fun SongListScreen(
     isShuffle: Boolean,
     shouldRepeat: Boolean,
     currentSongMediaItem: SongWrapper? = null,
-    nextSongMediaItem: SongWithFavourite? = null,
-    prevSongMediaItem: SongWithFavourite? = null,
     itemSongs: LazyPagingItems<SongWithFavourite>,
-    shouldUpdate: Boolean,
     isLoading: Boolean = false,
+    globalColorBackground: Int?,
+    isButtonsLight: Boolean,
     sliderPosition: Float,
     onUpdateSliderPosition: (Long) -> Unit,
+    skipForward: () -> Unit,
+    skipBackward: () -> Unit,
+    seekToPosition: (Long) -> Unit,
     updateSliderDraggedState: (Boolean) -> Unit,
     requestFocusAndPlay: (Long) -> Unit,
     abandonFocusAndPause: () -> Unit,
     query: String,
-    controller: MediaController?,
-    openVolumeDialog: () -> Unit,
-    openDeleteDialog: () -> Unit,
+    showVolumeDialog: () -> Unit,
+    showDeleteDialog: () -> Unit,
     currentVolume: Float,
     updateSeekBar: (Float) -> Unit,
     maxVolume: Float,
-    messageSet: Set<GenericMessageInfo>,
-    itemToDelete: MutableState<Song?>,
-    dialogVolumeState: MutableState<Boolean>,
-    dialogDeleteState: MutableState<Boolean>,
+    isPermissionGranted: Boolean,
+    messageSet: ImmutableSet<GenericMessageInfo>,
+    itemToDelete: Song?,
+    setItemToDelete: (Song) -> Unit,
+    dialogVolumeState: Boolean,
+    hideVolumeDialog: () -> Unit,
+    dialogDeleteState: Boolean,
+    hideDeleteDialog: () -> Unit,
     onTriggerEvent: (SongListEvents) -> Any = {}
 ) {
     val context = LocalContext.current
-    val snackBarHostState = remember { SnackbarHostState() }
 
-    if (shouldUpdate) {
-        onTriggerEvent(SongListEvents.GetSongs)
-        onTriggerEvent(SongListEvents.UpdateShouldUpdate(false))
-    }
+    val snackBarHostState = remember { SnackbarHostState() }
 
     val bottomSheetScaffoldState = rememberBottomSheetScaffoldState()
     val coroutineScope = rememberCoroutineScope()
 
-    var lifecycle by remember { mutableStateOf(Lifecycle.Event.ON_CREATE) }
-
     var shouldShowSearch by rememberSaveable { mutableStateOf(false) }
-
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            lifecycle = event
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
 
     val launcher = rememberLauncherForActivityResult(contract =
     ActivityResultContracts.StartIntentSenderForResult(), onResult = {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (it.resultCode == RESULT_OK) {
-                itemToDelete.value?.let { song ->
+                itemToDelete?.let { song ->
                     onTriggerEvent(SongListEvents.CompleteDeleteSong(listOf(song)))
                 }
             }
@@ -156,27 +138,27 @@ fun SongListScreen(
             for ((key, isGranted) in permissionMap) {
                 if (isGranted) {
                     if (key == Manifest.permission.READ_EXTERNAL_STORAGE || key == Manifest.permission.READ_MEDIA_AUDIO) {
-                        onTriggerEvent(SongListEvents.SetIsAcceptedPermission("ACCEPT"))
+                        onTriggerEvent(SongListEvents.SetIsAcceptedPermission(ACCEPT))
                         onTriggerEvent(SongListEvents.GetSongs)
                     } else {
                         //write permission to delete file
-                        itemToDelete.value?.let {
+                        itemToDelete?.let {
                             onTriggerEvent(SongListEvents.DeleteSong(listOf(it), launcher))
                         }
                     }
                 } else {
                     if (key == Manifest.permission.READ_EXTERNAL_STORAGE || key == Manifest.permission.READ_MEDIA_AUDIO) {
-                        onTriggerEvent(SongListEvents.SetIsAcceptedPermission("REJECT"))
+                        onTriggerEvent(SongListEvents.SetIsAcceptedPermission(REJECT))
                         (context as? Activity)?.finish()
                     } else {
-                        //toast to delete file
-                        itemToDelete.value?.let {
+                        itemToDelete?.let {
                             onTriggerEvent(SongListEvents.DeleteSong(listOf(it), launcher))
                         }
                     }
                 }
             }
         }
+
     BlingMusicPlayerTheme(
         snackBarHostState = snackBarHostState,
         displayProgressBar = isLoading,
@@ -189,13 +171,14 @@ fun SongListScreen(
                 )
             )
         },
+        isCurrentSongPresent = currentSongMediaItem != null,
         openAppSettings = {
             (context as? Activity)?.finish()
         },
+        globalColorBackground = globalColorBackground,
+        useDarkIconsNew = isButtonsLight,
         messageSet = messageSet,
-        onRemoveHeadMessageFromQueue = { onTriggerEvent(SongListEvents.OnRemoveHeadMessageFromQueue) },
-
-        ) {
+        onRemoveHeadMessageFromQueue = { onTriggerEvent(SongListEvents.OnRemoveHeadMessageFromQueue) }) {
         BackHandler(onBack = {
             if (bottomSheetScaffoldState.bottomSheetState.isExpanded) {
                 collapseExpandBottomScaffold(
@@ -208,30 +191,27 @@ fun SongListScreen(
             }
         })
 
-        if (dialogVolumeState.value) {
+        if (dialogVolumeState) {
             VolumeDialog(
-                onDismiss = { dialogVolumeState.value = false }, maxVolume = maxVolume,
+                onDismiss = hideVolumeDialog, maxVolume = maxVolume,
                 updateSeekBar = updateSeekBar, volumeLevel = currentVolume
             )
         }
 
-        if (dialogDeleteState.value) {
-            AreYouSureDeleteDialog(onDismiss = { dialogDeleteState.value = false },
+        if (dialogDeleteState) {
+            AreYouSureDeleteDialog(onDismiss = hideDeleteDialog,
                 onPositiveAction = {
                     requestPermissionLauncher.launch(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE))
-                    dialogDeleteState.value = false
+                    hideDeleteDialog()
                 }, onNegativeAction = {
-                    dialogDeleteState.value = false
+                    hideDeleteDialog()
                 })
         }
         BottomSheetScaffold(
             sheetPeekHeight = if (currentSongMediaItem == null) 0.dp else 56.dp,
-            sheetShape = if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) RoundedCornerShape(
-                percent = 50
-            ) else MaterialTheme.shapes.large,
             sheetContent = {
                 currentSongMediaItem?.let {
-                    PlaySongScreen(
+                    SingleSongScreen(
                         currentSong = currentSongMediaItem,
                         bottomSheetScaffoldState = bottomSheetScaffoldState,
                         sliderPosition = sliderPosition,
@@ -243,34 +223,11 @@ fun SongListScreen(
                                 )
                             )
                         },
-                        skipForward = {
-                            onUpdateSliderPosition(0L)
-                            nextSongMediaItem?.let {
-                                onTriggerEvent(SongListEvents.SetCurrentSong(it))
-                                controller?.let { controller ->
-                                    controller.setMediaItem(it.song.mediaItem)
-                                    if (controller.isPlaying) {
-                                        controller.prepareAndPlay()
-                                    }
-                                }
-                            }
-                        },
-                        skipBackward = {
-                            onUpdateSliderPosition(0L)
-                            prevSongMediaItem?.let {
-                                onTriggerEvent(SongListEvents.SetCurrentSong(it))
-                                controller?.let { controller ->
-                                    controller.setMediaItem(it.song.mediaItem)
-                                    if (controller.isPlaying) {
-                                        controller.prepareAndPlay()
-                                    }
-                                }
-                            }
-                        },
+                        skipForward = skipForward,
+                        skipBackward = skipBackward,
                         playOrPause = {
                             if (!isPlaying) {
                                 requestFocusAndPlay(sliderPosition.toLong())
-                                //requestFocusAndPlay(null)
                             } else {
                                 abandonFocusAndPause()
                             }
@@ -278,6 +235,7 @@ fun SongListScreen(
                         onUpdateSliderPosition = {
                             onUpdateSliderPosition(it.toLong())
                         },
+                        seekToPosition = seekToPosition,
                         onClick = {
                             if (bottomSheetScaffoldState.bottomSheetState.isCollapsed) {
                                 collapseExpandBottomScaffold(
@@ -286,7 +244,7 @@ fun SongListScreen(
                                     bottomSheetScaffoldState = bottomSheetScaffoldState
                                 )
                             }
-                        }, controller = controller,
+                        },
                         collapseExpandBottomSheet = {
                             collapseExpandBottomScaffold(
                                 it,
@@ -311,12 +269,15 @@ fun SongListScreen(
                         },
                         updateSliderDraggedState = updateSliderDraggedState,
                         displayVolumeDialog = {
-                            if (dialogVolumeState.value) {
-                                dialogVolumeState.value = false
+                            if (dialogVolumeState) {
+                                hideVolumeDialog()
                             } else {
-                                openVolumeDialog()
+                                showVolumeDialog()
                             }
-                        }, currentVolume = currentVolume.toInt()
+                        }, currentVolume = currentVolume.toInt(),
+                        globalDynamicBackgroundColor = globalColorBackground?.let { Color(it) }
+                            ?: MaterialTheme.colorScheme.primary,
+                        globalOnIconColor = if (isButtonsLight) Color.Black else Color.White
                     )
                 }
             }, scaffoldState = bottomSheetScaffoldState
@@ -330,9 +291,9 @@ fun SongListScreen(
                         TopAppBar(title = {
                             Text(text = buildAnnotatedString {
                                 withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("BLING" + " ")
+                                    append(stringResource(R.string.bling) + " ")
                                 }
-                                append("Music")
+                                append(stringResource(R.string.music))
                             }, fontSize = 16.sp)
                         }, actions = {
                             if (!shouldShowSearch) {
@@ -381,34 +342,46 @@ fun SongListScreen(
                 },
                 snackbarHost = { SnackbarHost(snackBarHostState) },
             ) { paddingValues ->
-                when(itemSongs.loadState.refresh){
+                when (itemSongs.loadState.refresh) {
                     LoadState.Loading -> {
                         Log.e("state", "loading")
                     }
+
                     is LoadState.Error -> {
                         Log.e("state", "error")
                     }
-                    else->{
+
+                    else -> {
                         when {
                             itemSongs.itemCount > 0 -> {
-                                Log.e("state", "info")
+                                //Log.e("state", "info")
                                 LazyColumn(
                                     modifier = Modifier
                                         .padding(
                                             start = 16.dp,
                                             end = 16.dp,
-                                            top = paddingValues.calculateTopPadding()
+                                            top = paddingValues.calculateTopPadding(),
                                         )
                                 ) {
-                                    itemsIndexed(items = itemSongs) { index, item ->
+                                    itemsIndexed(items = itemSongs, key = { _, item ->
+                                        item.song.id
+                                    }) { index, item ->
                                         item?.let { itemSong ->
-                                            Music_Item(item, deleteSong = {
-                                                itemToDelete.value = itemSong.song
-                                                openDeleteDialog()
-                                            }
+                                            Music_Item(song = item,
+                                                isSelected = currentSongMediaItem?.let { itemSong.song.id == it.song.id }
+                                                    ?: false,
+                                                isPlaying = isPlaying,
+                                                deleteSong = {
+                                                    setItemToDelete(itemSong.song)
+                                                    showDeleteDialog()
+                                                }
                                             ) {
                                                 onUpdateSliderPosition(0L)
-                                                onTriggerEvent(SongListEvents.SetCurrentSong(itemSong))
+                                                onTriggerEvent(
+                                                    SongListEvents.SetCurrentSong(
+                                                        itemSong
+                                                    )
+                                                )
                                                 requestFocusAndPlay(0L)
                                             }
                                         }
@@ -416,9 +389,11 @@ fun SongListScreen(
                                 }
                             }
 
-                            itemSongs.itemCount == 0 -> {
-                                Column(verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier
+                            itemSongs.itemCount == 0 && !isPermissionGranted -> {
+                                Column(
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
                                         .fillMaxSize()
                                         .padding(
                                             start = 16.dp,
@@ -426,7 +401,7 @@ fun SongListScreen(
                                             top = paddingValues.calculateTopPadding(),
                                             bottom = paddingValues.calculateBottomPadding()
                                         )
-                                ){
+                                ) {
                                     Text(
                                         stringResource(R.string.no_items_found),
                                         textAlign = TextAlign.Center,
