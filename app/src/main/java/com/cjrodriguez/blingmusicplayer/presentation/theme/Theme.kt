@@ -76,23 +76,10 @@ fun BlingMusicPlayerTheme(
             color = if (useDarkIcons) Color.Transparent else colorScheme.background,
             darkIcons = useDarkIcons
         )
-
-//        systemUiController.setNavigationBarColor(
-//            color = globalColorBackground?.let { Color(it) }?:colorScheme.background,//if (useDarkIcons) Color.Transparent else colorScheme.background,
-//            darkIcons = useDarkIconsNew
-//        )
-
-//        systemUiController.setNavigationBarColor(
-//            color = if (useDarkIcons) Color.Transparent else colorScheme.background,
-//            darkIcons = useDarkIcons
-//        )
-
         onDispose {}
     }
 
     val config = LocalConfiguration.current.orientation
-    //val context = LocalContext.current
-    //if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     LaunchedEffect(globalColorBackground) {
         setNavigationBarBasedOnInput(
             systemUiController,

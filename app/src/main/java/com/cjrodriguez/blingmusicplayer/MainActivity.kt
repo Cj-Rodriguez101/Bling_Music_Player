@@ -16,6 +16,7 @@ import android.media.MediaRouter.ROUTE_TYPE_USER
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -23,7 +24,6 @@ import androidx.annotation.RequiresApi
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -123,30 +123,24 @@ class MainActivity : ComponentActivity() {
             var displayVolumeDialog by remember { mutableStateOf(false) }
             var displayDeleteDialog by remember { mutableStateOf(false) }
 
-            val currentVolume = viewModel.currentVolume.collectAsState().value
-            val maxVolume = remember { mutableIntStateOf(0) }
-            LaunchedEffect(Unit) {
-                maxVolume.intValue = audioManager?.getStreamMaxVolume(STREAM_MUSIC) ?: 0
-                viewModel.updateCurrentVolume(
-                    audioManager?.getStreamVolume(STREAM_MUSIC) ?: 0
-                )
-            }
+            val currentVolume by viewModel.currentVolume.collectAsStateWithLifecycle()
+            val maxVolume by remember { mutableIntStateOf(audioManager?.getStreamMaxVolume(STREAM_MUSIC) ?: 0) }
 
             audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
                 when (focusChange) {
                     AudioManager.AUDIOFOCUS_GAIN -> {
-                        controller?.let {
-                            controller?.prepareAndPlay()
-                        }
+                        controller?.prepareAndPlay()
                     }
 
                     AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                         controller?.pause()
                         controller?.seekTo(0L)
+                        viewModel.updateIsPlaying(false)
                     }
 
                     AudioManager.AUDIOFOCUS_LOSS -> {
                         controller?.pause()
+                        viewModel.updateIsPlaying(false)
                     }
 
                     AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
@@ -156,6 +150,7 @@ class MainActivity : ComponentActivity() {
 
                     else -> {
                         controller?.pause()
+                        viewModel.updateIsPlaying(false)
                     }
                 }
             }
@@ -279,11 +274,13 @@ class MainActivity : ComponentActivity() {
                         updateSliderDraggedState = {
                             viewModel.updateSliderDragged(it)
                         },
-                        currentVolume = currentVolume.toFloat(),
-                        maxVolume = maxVolume.intValue.toFloat(),
-                        updateSeekBar = {
-                            audioManager?.setStreamVolume(STREAM_MUSIC, it.toInt(), 0)
-                            viewModel.updateCurrentVolume(it.toInt())
+                        currentVolume = currentVolume,
+                        maxVolume = maxVolume,
+                        updateVolumeSeekbarVm = {
+                            viewModel.updateCurrentVolume(it)
+                        },
+                        updateDeviceVolume = {
+                            audioManager?.setStreamVolume(STREAM_MUSIC, it, 0)
                         },
                         itemToDelete = itemToDelete,
                         setItemToDelete = {
@@ -401,7 +398,8 @@ class MainActivity : ComponentActivity() {
             }
 
             override fun onRouteVolumeChanged(router: MediaRouter?, info: MediaRouter.RouteInfo?) {
-                viewModel.updateCurrentVolume(audioManager?.getStreamVolume(STREAM_MUSIC) ?: 0)
+                val vol = audioManager?.getStreamVolume(STREAM_MUSIC) ?: 0
+                viewModel.updateCurrentVolume(vol)
             }
 
         }

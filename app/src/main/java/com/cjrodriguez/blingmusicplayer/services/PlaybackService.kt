@@ -257,7 +257,6 @@ class PlaybackService : MediaLibraryService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // Create the NotificationChannel, but only on API 26+ because
             // the NotificationChannel class is new and not in the support library
-            //val description = "ITEM_TRACKER_CHANNEL_DESCRIPTION"
             val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance)
             channel.description = CHANNEL_DESCRIPTION

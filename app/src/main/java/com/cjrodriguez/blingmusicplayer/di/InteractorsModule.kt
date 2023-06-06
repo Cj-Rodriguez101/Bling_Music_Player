@@ -90,33 +90,4 @@ object InteractorsModule {
             songDao
         )
     }
-
-//    @androidx.media3.common.util.UnstableApi
-//    @ViewModelScoped
-//    @Provides
-//    fun provideSessionToken(baseApplication: BaseApplication): SessionToken{
-//        return SessionToken(baseApplication.applicationContext,
-//            ComponentName(baseApplication.applicationContext, MusicLibraryService::class.java))
-//    }
-
-    //remove
-//    @ViewModelScoped
-//    @Provides
-//    fun provideListenerFuture(
-//        baseApplication: BaseApplication,
-//        sessionToken: SessionToken
-//    ): ListenableFuture<MediaController> {
-//        return MediaController.Builder(baseApplication.applicationContext, sessionToken).buildAsync()
-//    }
-//
-//    @ViewModelScoped
-//    @Provides
-//    fun provideMediaController(controllerFuture: ListenableFuture<MediaController>): MediaController?{
-//    var controller: MediaController? = null
-//    runBlocking {
-//
-//    }
-//        return controllerFuture.await()
-//    }
-
 }

@@ -100,9 +100,10 @@ fun SongListScreen(
     query: String,
     showVolumeDialog: () -> Unit,
     showDeleteDialog: () -> Unit,
-    currentVolume: Float,
-    updateSeekBar: (Float) -> Unit,
-    maxVolume: Float,
+    currentVolume: Int,
+    updateVolumeSeekbarVm: (Int) -> Unit,
+    updateDeviceVolume: (Int) -> Unit,
+    maxVolume: Int,
     isPermissionGranted: Boolean,
     messageSet: ImmutableSet<GenericMessageInfo>,
     itemToDelete: Song?,
@@ -194,7 +195,8 @@ fun SongListScreen(
         if (dialogVolumeState) {
             VolumeDialog(
                 onDismiss = hideVolumeDialog, maxVolume = maxVolume,
-                updateSeekBar = updateSeekBar, volumeLevel = currentVolume
+                updateVolumeSeekBarVm = updateVolumeSeekbarVm,
+                updateDeviceVolume = updateDeviceVolume, volumeLevel = currentVolume
             )
         }
 
@@ -274,7 +276,7 @@ fun SongListScreen(
                             } else {
                                 showVolumeDialog()
                             }
-                        }, currentVolume = currentVolume.toInt(),
+                        }, currentVolume = currentVolume,
                         globalDynamicBackgroundColor = globalColorBackground?.let { Color(it) }
                             ?: MaterialTheme.colorScheme.primary,
                         globalOnIconColor = if (isButtonsLight) Color.Black else Color.White
@@ -354,7 +356,6 @@ fun SongListScreen(
                     else -> {
                         when {
                             itemSongs.itemCount > 0 -> {
-                                //Log.e("state", "info")
                                 LazyColumn(
                                     modifier = Modifier
                                         .padding(

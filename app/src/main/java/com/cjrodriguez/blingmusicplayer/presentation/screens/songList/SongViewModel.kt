@@ -26,6 +26,7 @@ import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.Son
 import com.cjrodriguez.blingmusicplayer.presentation.screens.songList.events.SongListEvents.*
 import com.cjrodriguez.blingmusicplayer.presentation.theme.Purple80
 import com.cjrodriguez.blingmusicplayer.repository.SongRepository
+import com.cjrodriguez.blingmusicplayer.util.ACCEPT
 import com.cjrodriguez.blingmusicplayer.util.GenericMessageInfo
 import com.google.android.material.color.DynamicColors
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -123,7 +124,7 @@ class SongViewModel @Inject constructor(
 
             launch {
                 settingsDataStore.firstTimePermissionFlow.collectLatest {
-                    _isPermissionGranted.value = it != "ACCEPT"
+                    _isPermissionGranted.value = it != ACCEPT
                 }
             }
 
@@ -325,12 +326,12 @@ class SongViewModel @Inject constructor(
         settingsDataStore.writeShouldUpdate(shouldUpdate)
     }
 
-    private fun updateIsPlaying(isPlaying: Boolean) {
+    fun updateIsPlaying(isPlaying: Boolean) {
         playingStateIndicator.isPlaying.value = isPlaying
     }
 
-    fun updateCurrentVolume(currentVolume: Int) {
-        _currentVolume.value = currentVolume
+    fun updateCurrentVolume(volume: Int) {
+        _currentVolume.value = volume
     }
 
     private fun updateIsShuffle(isShuffle: Boolean) {
@@ -404,10 +405,6 @@ class SongViewModel @Inject constructor(
 
     private fun setUnFavourite(song: SongWithFavourite) {
         viewModelScope.launch {
-//            CoroutineScope(Dispatchers.IO).launch {
-//                songRepository.setUnsetFavourite(song)
-//                setCurrentSong(song)
-//            }
             CoroutineScope(Dispatchers.IO).launch {
                 songRepository.setUnsetFavourite(song).collectLatest { dataState ->
 
@@ -416,9 +413,7 @@ class SongViewModel @Inject constructor(
                     }
 
                     dataState.message?.let { error ->
-                        //Log.e("TAG", "newSearch: insert")
                         appendToMessageQueue(error)
-                        //messageQueue.add(error.build())
                     }
                 }
             }
@@ -429,11 +424,6 @@ class SongViewModel @Inject constructor(
         _currentPosition.value = position
     }
 
-//    fun setPreviousAndNextSong(previousSong: Song?, nextSong: Song?){
-//        _previousSong.value = previousSong
-//        _nextSong.value = nextSong
-//    }
-
     private fun updateSongs() {
         viewModelScope.launch {
             val job = CoroutineScope(Dispatchers.IO).launch {
@@ -441,7 +431,6 @@ class SongViewModel @Inject constructor(
                     settingsDataStore
                         .firstTimePermissionFlow.first() == ""
                 ).collectLatest { dataState ->
-                    //Log.e("longId", "controller is null ${controllerStateFlow.value == null}")
 
                     dataState.isLoading.let {
                         _isLoading.value = it
@@ -458,77 +447,14 @@ class SongViewModel @Inject constructor(
     }
 
     fun setCurrentSong(song: SongWithFavourite?) {
-//        viewModelScope.launch {
-//            _currentSong.value = null
-//            _currentSong.value = song
-//            song?.let {
-//                if (shouldUpdate){
-//                    _previousSong.value =
-//                        songRepository.getPreviousSong(it.song.sortedUnSpacedTitle, it.song.id)
-//                            .first()
-//                    _nextSong.value = songRepository.getNextSong(
-//                        it.song.sortedUnSpacedTitle,
-//                        it.song.id,
-//                        isShuffle.value
-//                    ).first()
-//                }
-//                settingsDataStore.writeLastPlayedSongId(it.song.id)
-//            }
-//        }
         _currentSong.value = null
         _currentSong.value = song
 
         song?.let {
-//            _globalColorBackgroundInt.value = try {
-//                var colorToReturn: Int? = null
-//                val map = MediaStore.Images.Media.getBitmap(
-//                    baseApplication.applicationContext.contentResolver,
-//                    Uri.parse(song.song.albumId)
-//                )
-//                map?.let { ap ->
-//                    Palette.from(ap).generate().dominantSwatch?.let { swatch ->
-//                        colorToReturn = adjustAlpha(swatch.rgb, 2f)
-//                    }
-//                }
-//                colorToReturn
-//            } catch (ex: Exception) {
-//                null
-//            }
-//
-//            val primaryColorIfExist = if (DynamicColors.isDynamicColorAvailable()) {
-//                val dynamicColorContext = DynamicColors.wrapContextIfAvailable(baseApplication.applicationContext, com.cjrodriguez.blingmusicplayer.R.style.Theme_BlingMusicPlayer)
-//
-//                val attrsToResolve = intArrayOf(
-//                    android.R.attr.colorPrimary
-//                )
-//
-//                val ta: TypedArray =
-//                    dynamicColorContext.obtainStyledAttributes(attrsToResolve)
-//                val primary = ta.getColor(0, 0)
-//                ta.recycle() // recycle TypedArray
-//                primary
-//
-//            } else {
-//                Purple80.toArgb()
-//            }
-//
-//           val nullableColor =  if(_globalColorBackgroundInt.value!=null){
-//                _globalColorBackgroundInt.value
-//            } else {
-//                primaryColorIfExist
-//            }
-//
-//            _isButtonsLight.value = nullableColor?.let { ColorUtils.calculateLuminance(
-//                Color(it).toArgb()
-//            ) > 0.5 }?:true
-
             setBackgroundColorBasedOnCurrentSong(it)
         }
 
         settingsDataStore.writeLastPlayedSongId(song?.song?.id ?: 0L)
-//        song?.let {
-//            settingsDataStore.writeLastPlayedSongId(it.song.id)
-//        }
     }
 
     private fun appendToMessageQueue(messageInfo: GenericMessageInfo.Builder) {
