@@ -7,24 +7,26 @@ Bare Bones Music Player App With Media3 (Exoplayer) And Jetpack Compose
 * Refresh Music Library If Music Is Deleted Or Added
 * Delete Single Music 
 * Add Music To Favourite (Only Playlist Currently)
+* Change BottomScaffoldColor To Match Album Art
 
 ## Architecture - MVVM
 ## Tools
 * Jetpack Compose
 * Room
+* PaletteApi
 * Datastore
 * Media3 (Exoplayer)
 * Hilt
 * Content Provider
 * Broadcast Receiver
+* Gson
 * Leak Canary
 
 <p align="center"
 float="center">
-<img src="https://github.com/Cj-Rodriguez101/RickAndMorty/blob/master/rick/characters_fill.jpg" width="270" height="480"/>
-<img src="https://github.com/Cj-Rodriguez101/RickAndMorty/blob/master/rick/characters_retry.jpg" width="270" height="480"/>
-<img src="https://github.com/Cj-Rodriguez101/RickAndMorty/blob/master/rick/location_list.jpg" width="270" height="480"/>
-<img src="https://github.com/Cj-Rodriguez101/RickAndMorty/blob/master/rick/epsiode_list.jpg" width="270" height="480"/>
-<img src="https://github.com/Cj-Rodriguez101/RickAndMorty/blob/master/rick/epsiode_inside.jpg" width="270" height="480"/>
+<img src="https://github.com/Cj-Rodriguez101/Bling_Music_Player/blob/master/screenshots/Screenshot_20230606_111640_Bling%20Music%20Player.jpg" width="270" height="480"/>
+<img src="https://github.com/Cj-Rodriguez101/Bling_Music_Player/blob/master/screenshots/Screenshot_20230606_111656_Bling%20Music%20Player.jpg" width="270" height="480"/>
+<img src="https://github.com/Cj-Rodriguez101/Bling_Music_Player/blob/master/screenshots/Screenshot_20230606_111702_Bling%20Music%20Player.jpg" width="270" height="480"/>
+<img src="https://github.com/Cj-Rodriguez101/Bling_Music_Player/blob/master/screenshots/Screenshot_20230606_111947_Bling%20Music%20Player.jpg" width="270" height="480"/>
 </p>
 
