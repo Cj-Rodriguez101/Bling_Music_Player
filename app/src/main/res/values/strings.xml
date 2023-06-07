@@ -31,4 +31,5 @@
     <string name="shuffle">Shuffle</string>
     <string name="play_or_pause">Play Or Pause</string>
     <string name="repeat">Repeat</string>
+    <string name="change_volume">Change Volume</string>
 </resources>

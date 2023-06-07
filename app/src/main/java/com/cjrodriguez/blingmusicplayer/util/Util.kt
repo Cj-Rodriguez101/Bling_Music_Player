@@ -26,7 +26,7 @@ object Util {
         return when (PackageManager.PERMISSION_GRANTED) {
             ContextCompat.checkSelfPermission(
                 context,
-                if (Build.VERSION.SDK_INT < 32) Manifest.permission.READ_EXTERNAL_STORAGE else Manifest.permission.READ_MEDIA_AUDIO
+                if (Build.VERSION.SDK_INT < 33) Manifest.permission.READ_EXTERNAL_STORAGE else Manifest.permission.READ_MEDIA_AUDIO
             ) -> {
                 // You can use the API that requires the permission.
                 true

@@ -166,7 +166,7 @@ fun SongListScreen(
         getReadPermission = {
             requestPermissionLauncher.launch(
                 arrayOf(
-                    if (Build.VERSION.SDK_INT < 32)
+                    if (Build.VERSION.SDK_INT < 33)
                         Manifest.permission.READ_EXTERNAL_STORAGE
                     else Manifest.permission.READ_MEDIA_AUDIO
                 )
@@ -362,11 +362,12 @@ fun SongListScreen(
                                             start = 16.dp,
                                             end = 16.dp,
                                             top = paddingValues.calculateTopPadding(),
+                                            bottom = paddingValues.calculateBottomPadding()
                                         )
                                 ) {
                                     itemsIndexed(items = itemSongs, key = { _, item ->
                                         item.song.id
-                                    }) { index, item ->
+                                    }) { _, item ->
                                         item?.let { itemSong ->
                                             Music_Item(song = item,
                                                 isSelected = currentSongMediaItem?.let { itemSong.song.id == it.song.id }
@@ -379,10 +380,7 @@ fun SongListScreen(
                                             ) {
                                                 onUpdateSliderPosition(0L)
                                                 onTriggerEvent(
-                                                    SongListEvents.SetCurrentSong(
-                                                        itemSong
-                                                    )
-                                                )
+                                                    SongListEvents.SetCurrentSong(itemSong))
                                                 requestFocusAndPlay(0L)
                                             }
                                         }
@@ -399,8 +397,7 @@ fun SongListScreen(
                                         .padding(
                                             start = 16.dp,
                                             end = 16.dp,
-                                            top = paddingValues.calculateTopPadding(),
-                                            bottom = paddingValues.calculateBottomPadding()
+                                            top = paddingValues.calculateTopPadding()
                                         )
                                 ) {
                                     Text(

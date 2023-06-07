@@ -26,6 +26,8 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY
+import androidx.media3.common.Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaLibraryService
@@ -46,7 +48,9 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -75,7 +79,7 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var modifiedPlayer: ForwardingPlayer
     private var mediaSession: MediaLibrarySession? = null
     private var playerListener: Player.Listener? = null
-    private var callback: MediaSession.Callback? = null
+    private var customCallback: CustomMediaSessionCallback? = null
     private lateinit var customCommands: List<CommandButton>
     private var customLayout = ImmutableList.of<CommandButton>()
 
@@ -85,13 +89,17 @@ class PlaybackService : MediaLibraryService() {
 
     private var notificationManager: NotificationManager? = null
 
+    private var ioCoroutineScope: CoroutineScope? = null
+    private var mainCoroutineScope: CoroutineScope? = null
+
     @OptIn(
         ExperimentalMaterialApi::class, ExperimentalComposeUiApi::class,
         ExperimentalMaterial3Api::class
     )
     override fun onCreate() {
         super.onCreate()
-        val customCallback = CustomMediaSessionCallback()
+
+        customCallback = CustomMediaSessionCallback()
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(AudioAttributes.DEFAULT, true).build()
         customCommands = listOf(
@@ -103,21 +111,26 @@ class PlaybackService : MediaLibraryService() {
             )
         )
         customLayout = ImmutableList.copyOf(customCommands)
+
+        ioCoroutineScope = CoroutineScope(IO)
+        mainCoroutineScope = CoroutineScope(Main)
         playerListener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 super.onIsPlayingChanged(isPlaying)
                 if (!isPlaying) {
-                    if (player.playbackState == Player.STATE_ENDED) {
-                        if (playingStateIndicator.isPlaying.value) {
-                            CoroutineScope(Dispatchers.Main).launch {
+                    if (playingStateIndicator.isPlaying.value) {
+                        if (player.playbackState == Player.STATE_ENDED) {
+
+                            mainCoroutineScope?.launch {
                                 val shouldRepeat = dataStore.shouldRepeatFlow.first()
                                 if (!shouldRepeat) {
-                                    getNextSongIfExists(player, dataStore.isShuffleFlow.first()).let {
+                                    getNextSongIfExists(
+                                        player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
+                                            .toString(),
+                                        dataStore.isShuffleFlow.first()
+                                    ).let {
                                         it?.let { song ->
                                             player.setMediaItem(song.song.mediaItem)
-                                            if (playingStateIndicator.isPlaying.value) {
-                                                player.prepareAndPlay()
-                                            }
                                         }
                                     }
                                 } else {
@@ -125,13 +138,27 @@ class PlaybackService : MediaLibraryService() {
                                 }
                             }
                         }
+                    } else {
+                        playingStateIndicator.isPlaying.value = false
+                    }
+                } else {
+                    if (player.playbackState != Player.STATE_READY) {
+                        playingStateIndicator.isPlaying.value = true
                     }
                 }
+            }
 
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                super.onPlayWhenReadyChanged(playWhenReady, reason)
+                if ((reason == PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY
+                            || reason == PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS)) {
+                    playingStateIndicator.isPlaying.value = playWhenReady
+                }
             }
         }
         modifiedPlayer = object : ForwardingPlayer(player) {
             override fun getAvailableCommands(): Player.Commands {
+
                 return super.getAvailableCommands().buildUpon().remove(COMMAND_SEEK_TO_PREVIOUS)
                     .remove(COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).remove(COMMAND_SEEK_TO_NEXT)
                     .remove(COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).build()
@@ -146,6 +173,8 @@ class PlaybackService : MediaLibraryService() {
                 super.pause()
                 playingStateIndicator.isPlaying.value = false
             }
+
+
         }
         modifiedPlayer.addListener(playerListener!!)
 
@@ -157,7 +186,7 @@ class PlaybackService : MediaLibraryService() {
                 getPendingIntent(0, immutableFlag or FLAG_UPDATE_CURRENT)
             }
         mediaSession =
-            MediaLibrarySession.Builder(this, modifiedPlayer, customCallback)
+            MediaLibrarySession.Builder(this, modifiedPlayer, customCallback!!)
                 .setSessionActivity(sessionActivityPendingIntent!!).build()
         if (!customLayout.isEmpty()) {
             // Send custom layout to legacy session.
@@ -166,8 +195,11 @@ class PlaybackService : MediaLibraryService() {
 
         rewindBroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    getPreviousSongIfExists(player)?.let {
+                CoroutineScope(Main).launch {
+                    getPreviousSongIfExists(
+                        player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
+                            .toString()
+                    )?.let {
                         it.let { song ->
                             player.setMediaItem(song.song.mediaItem)
                             if (playingStateIndicator.isPlaying.value) {
@@ -191,8 +223,11 @@ class PlaybackService : MediaLibraryService() {
 
         fastForwardBroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    getNextSongIfExists(player, dataStore.isShuffleFlow.first())?.let {
+                CoroutineScope(Main).launch {
+                    getNextSongIfExists(
+                        player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
+                            .toString(), dataStore.isShuffleFlow.first()
+                    )?.let {
                         it.let { song ->
                             player.setMediaItem(song.song.mediaItem)
                             if (playingStateIndicator.isPlaying.value) {
@@ -215,7 +250,6 @@ class PlaybackService : MediaLibraryService() {
                 actionFactory: MediaNotification.ActionFactory,
                 onNotificationChangedCallback: MediaNotification.Provider.Callback
             ): MediaNotification {
-                // This run every time when I press buttons on notification bar:
                 return makeStatusNotification(mediaSession)
             }
 
@@ -223,25 +257,24 @@ class PlaybackService : MediaLibraryService() {
                 session: MediaSession,
                 action: String,
                 extras: Bundle
-            ): Boolean {
-                return false
-            }
+            ): Boolean { return false }
         })
     }
 
-    private suspend fun getPreviousSongIfExists(player: Player) =
-        songDao.getPreviousSong(
-            player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
-                .toString(), 0L
-        ).first()
+    private suspend fun getPreviousSongIfExists(sortedSpacedTitle: String) =
+        ioCoroutineScope?.async {
+            songDao.getPreviousSong(
+                sortedSpacedTitle, 0L
+            ).first()
+        }?.await()
 
-    private suspend fun getNextSongIfExists(player: Player, shouldShuffle: Boolean) =
-        songDao.getNextSong(
-            player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
-                .toString(), 0L, shouldShuffle
-        ).first()
+    private suspend fun getNextSongIfExists(sortedSpacedTitle: String, shouldShuffle: Boolean) =
+        ioCoroutineScope?.async {
+            songDao.getNextSong(
+                sortedSpacedTitle, 0L, shouldShuffle
+            ).first()
+        }?.await()
 
-    @OptIn(ExperimentalComposeUiApi::class)
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
         super.onUpdateNotification(session, startInForegroundRequired)
     }
@@ -304,20 +337,24 @@ class PlaybackService : MediaLibraryService() {
             .setOngoing(session.player.isPlaying).addAction(
                 R.drawable.skip_backward,
                 getString(R.string.previous),
-                getBroadcast(context, 4, Intent(REWIND),
-                    FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
+                getBroadcast(
+                    context, 4, Intent(REWIND),
+                    FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE
+                )
             ).addAction(
-                if (!session.player.isPlaying && session.player.playbackState
-                    != Player.STATE_BUFFERING) R.drawable.baseline_play_arrow_24
+                if (!playingStateIndicator.isPlaying.value) R.drawable.baseline_play_arrow_24
                 else androidx.media3.ui.R.drawable.exo_icon_pause,
                 getString(R.string.play) + "/" + getString(R.string.pause),
-                getBroadcast(context, 5, Intent(PLAY),
-                    FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
+                getBroadcast(
+                    context, 5, Intent(PLAY),
+                    FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE
+                )
             ).addAction(
                 R.drawable.skip_forward,
                 getString(R.string.next),
-                getBroadcast(context, 6, Intent(FAST_FWD)
-                    , FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE)
+                getBroadcast(
+                    context, 6, Intent(FAST_FWD), FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE
+                )
             )
             .setAutoCancel(false)
 
@@ -326,6 +363,8 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         //super.onTaskRemoved(rootIntent)
+//        if (audioManager != null && focusRequest != null)
+//            AudioManagerCompat.abandonAudioFocusRequest(audioManager!!, focusRequest!!)
         mediaSession?.let {
             stopSelf()
         }
@@ -335,13 +374,15 @@ class PlaybackService : MediaLibraryService() {
         mediaSession
 
     override fun onDestroy() {
+        ioCoroutineScope = null
+        mainCoroutineScope = null
         mediaSession?.run {
             player.removeListener(playerListener!!)
             player.release()
             release()
             mediaSession = null
         }
-        callback = null
+        customCallback = null
         unregisterReceiver(rewindBroadcastReceiver)
         unregisterReceiver(playPauseBroadcastReceiver)
         unregisterReceiver(fastForwardBroadcastReceiver)
@@ -378,8 +419,11 @@ class PlaybackService : MediaLibraryService() {
             val player = session.player
             if (customCommand.customAction == REWIND) {
 
-                CoroutineScope(Dispatchers.Main).launch {
-                    getPreviousSongIfExists(session.player)?.let {
+                CoroutineScope(Main).launch {
+                    getPreviousSongIfExists(
+                        session.player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
+                            .toString()
+                    )?.let {
                         it.let { song ->
                             player.setMediaItem(song.song.mediaItem)
                             if (player.isPlaying) {
@@ -389,8 +433,11 @@ class PlaybackService : MediaLibraryService() {
                     }
                 }
             } else {
-                CoroutineScope(Dispatchers.Main).launch {
-                    getNextSongIfExists(player, dataStore.isShuffleFlow.first())?.let { song ->
+                CoroutineScope(Main).launch {
+                    getNextSongIfExists(
+                        player.mediaMetadata.extras?.getString(SORTED_SPACED_TITLE)
+                            .toString(), dataStore.isShuffleFlow.first()
+                    )?.let { song ->
                         player.setMediaItem(song.song.mediaItem)
                         if (player.isPlaying) {
                             player.prepareAndPlay()
@@ -416,6 +463,7 @@ class PlaybackService : MediaLibraryService() {
             return Futures.immediateFuture(updatedMediaItems)
         }
     }
+
     private fun getRewindCommandButton(sessionCommand: SessionCommand): CommandButton {
         return CommandButton.Builder().setDisplayName(
             applicationContext.getString(R.string.previous)

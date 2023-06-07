@@ -55,7 +55,7 @@ class DeleteSong(
             emit(
                 DataState.data(data = Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q,
                     message = GenericMessageInfo.Builder()
-                        .id("DeleteSong").title(context.getString(R.string.success))//.description("no gotten")
+                        .id("DeleteSong").title(context.getString(R.string.success))
                         .uiComponentType(UIComponentType.None)
                 )
             )
@@ -80,7 +80,7 @@ class DeleteSong(
             emit(
                 DataState.data(
                     message = GenericMessageInfo.Builder()
-                        .id("DeleteSong").title(context.getString(R.string.success))//.description("no gotten")
+                        .id("DeleteSong").title(context.getString(R.string.success))
                         .uiComponentType(UIComponentType.None)
                 )
             )

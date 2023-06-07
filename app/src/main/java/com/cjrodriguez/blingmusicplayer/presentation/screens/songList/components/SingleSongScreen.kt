@@ -391,7 +391,7 @@ private fun PortraitExpandedScreen(
                 IconButton(onClick = displayVolumeDialog) {
                     Icon(
                         imageVector = if (currentVolume > 0) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeMute,
-                        contentDescription = "Mute Or Unmute",
+                        contentDescription = stringResource(R.string.change_volume),
                         tint = if (isSystemInDarkMode) Color.White else MaterialTheme.colorScheme.onBackground
                     )
                 }

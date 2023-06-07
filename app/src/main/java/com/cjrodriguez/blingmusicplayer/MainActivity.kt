@@ -16,7 +16,6 @@ import android.media.MediaRouter.ROUTE_TYPE_USER
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -56,7 +55,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-
 @ExperimentalMaterialApi
 @ExperimentalComposeUiApi
 @ExperimentalMaterial3Api
@@ -87,8 +85,6 @@ class MainActivity : ComponentActivity() {
 
     private var updatePlayingState: Player.Listener? = null
 
-    private var audioFocusChangeListener: AudioManager.OnAudioFocusChangeListener? = null
-
     @RequiresApi(Build.VERSION_CODES.M)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,7 +96,7 @@ class MainActivity : ComponentActivity() {
         mediaRouter =
             applicationContext.getSystemService(Context.MEDIA_ROUTER_SERVICE) as MediaRouter
 
-        observer = MediaContentObserver(applicationContext =  applicationContext)
+        observer = MediaContentObserver(applicationContext = applicationContext)
         applicationContext.contentResolver.registerContentObserver(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             true,
@@ -124,35 +120,18 @@ class MainActivity : ComponentActivity() {
             var displayDeleteDialog by remember { mutableStateOf(false) }
 
             val currentVolume by viewModel.currentVolume.collectAsStateWithLifecycle()
-            val maxVolume by remember { mutableIntStateOf(audioManager?.getStreamMaxVolume(STREAM_MUSIC) ?: 0) }
+            val maxVolume by remember {
+                mutableIntStateOf(
+                    audioManager?.getStreamMaxVolume(
+                        STREAM_MUSIC
+                    ) ?: 0
+                )
+            }
 
-            audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-                when (focusChange) {
-                    AudioManager.AUDIOFOCUS_GAIN -> {
-                        controller?.prepareAndPlay()
-                    }
-
-                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                        controller?.pause()
-                        controller?.seekTo(0L)
-                        viewModel.updateIsPlaying(false)
-                    }
-
-                    AudioManager.AUDIOFOCUS_LOSS -> {
-                        controller?.pause()
-                        viewModel.updateIsPlaying(false)
-                    }
-
-                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                        audioManager?.setStreamVolume(STREAM_MUSIC, 2, 0)
-                        viewModel.updateCurrentVolume(2)
-                    }
-
-                    else -> {
-                        controller?.pause()
-                        viewModel.updateIsPlaying(false)
-                    }
-                }
+            LaunchedEffect(Unit) {
+                viewModel.updateCurrentVolume(
+                    audioManager?.getStreamVolume(STREAM_MUSIC) ?: 0
+                )
             }
 
             updatePlayingState = object : Player.Listener {
@@ -218,16 +197,16 @@ class MainActivity : ComponentActivity() {
                         },
                         skipBackward = {
                             viewModel.updatePosition(0f)
-                            controller?.let { controller->
-                                if(controller.currentPosition >= 4000L){
+                            controller?.let { controller ->
+                                if (controller.currentPosition >= 4000L) {
                                     controller.seekTo(0L)
                                 } else {
                                     previousSong?.let {
                                         viewModel.setCurrentSong(it)
-                                            controller.setMediaItem(it.song.mediaItem)
-                                            if (controller.isPlaying) {
-                                                controller.prepareAndPlay()
-                                            }
+                                        controller.setMediaItem(it.song.mediaItem)
+                                        if (controller.isPlaying) {
+                                            controller.prepareAndPlay()
+                                        }
 
                                     }
                                 }
@@ -242,17 +221,10 @@ class MainActivity : ComponentActivity() {
                         sliderPosition = sliderPosition,
                         requestFocusAndPlay = { pos ->
 
-                            controller?.let {
-
                                 viewModel.currentSong.value?.let {
-                                    controller?.setMediaItem(it.song.mediaItem)
-                                    controller?.setMediaItem(
-                                        it.song.mediaItem,
-                                        pos
-                                    )
+                                    controller?.setMediaItem(it.song.mediaItem, pos)
                                     controller?.prepareAndPlay()
                                 }
-                            }
                         },
                         abandonFocusAndPause = {
                             controller?.pause()
@@ -284,7 +256,7 @@ class MainActivity : ComponentActivity() {
                         },
                         itemToDelete = itemToDelete,
                         setItemToDelete = {
-                            itemToDelete =  it
+                            itemToDelete = it
                         }
                     )
                 }
@@ -317,16 +289,14 @@ class MainActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
-            viewModel.isPlaying.collectLatest {isPlaying ->
+            viewModel.isPlaying.collectLatest { isPlaying ->
                 if (isPlaying) {
                     launch {
-                        while(true){
+                        while (true) {
                             if (!viewModel.isSliderDragged.value) {
                                 controller.currentPosition.let { pos ->
                                     val position = viewModel.currentPosition.value
-                                    pos.let {
-                                        viewModel.updatePosition(if (pos <= 0L) position else it.toFloat())
-                                    }
+                                    viewModel.updatePosition(if (pos <= 0L) position else pos.toFloat())
                                 }
                             }
 
@@ -373,8 +343,7 @@ class MainActivity : ComponentActivity() {
                 router: MediaRouter?,
                 type: Int,
                 info: MediaRouter.RouteInfo?
-            ) {
-            }
+            ) {}
 
             override fun onRouteAdded(router: MediaRouter?, info: MediaRouter.RouteInfo?) {}
 
@@ -387,15 +356,13 @@ class MainActivity : ComponentActivity() {
                 info: MediaRouter.RouteInfo?,
                 group: MediaRouter.RouteGroup?,
                 index: Int
-            ) {
-            }
+            ) {}
 
             override fun onRouteUngrouped(
                 router: MediaRouter?,
                 info: MediaRouter.RouteInfo?,
                 group: MediaRouter.RouteGroup?
-            ) {
-            }
+            ) {}
 
             override fun onRouteVolumeChanged(router: MediaRouter?, info: MediaRouter.RouteInfo?) {
                 val vol = audioManager?.getStreamVolume(STREAM_MUSIC) ?: 0
@@ -404,13 +371,9 @@ class MainActivity : ComponentActivity() {
 
         }
         mediaRouter?.addCallback(ROUTE_TYPE_USER, callBack, CALLBACK_FLAG_UNFILTERED_EVENTS)
-
     }
 
     override fun onPause() {
-        audioFocusChangeListener?.let {
-            audioManager?.abandonAudioFocus(it)
-        }
         unregisterReceiver(myNoisyAudioStreamReceiver)
         mediaRouter?.removeCallback(callBack!!)
         callBack = null
