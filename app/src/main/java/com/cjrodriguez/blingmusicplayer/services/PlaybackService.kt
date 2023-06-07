@@ -342,7 +342,7 @@ class PlaybackService : MediaLibraryService() {
                     FLAG_UPDATE_CURRENT or FLAG_IMMUTABLE
                 )
             ).addAction(
-                if (!playingStateIndicator.isPlaying.value) R.drawable.baseline_play_arrow_24
+                if (!session.player.isPlaying && session.player.playbackState != Player.STATE_BUFFERING) R.drawable.baseline_play_arrow_24
                 else androidx.media3.ui.R.drawable.exo_icon_pause,
                 getString(R.string.play) + "/" + getString(R.string.pause),
                 getBroadcast(
